@@ -145,3 +145,91 @@ it('deletes a word', function () {
         'id' => $word->id,
     ]);
 });
+
+it('marks a normal word as hard', function () {
+    $word = Word::create([
+        'english' => 'apple',
+        'japanese' => 'りんご',
+        'is_hard' => false,
+    ]);
+
+    $response = $this->patch("/words/{$word->id}/hard");
+
+    $response->assertRedirect(route('words.index'));
+
+    expect($word->fresh()->is_hard)->toBeTrue();
+});
+
+it('unmarks a hard word', function () {
+    $word = Word::create([
+        'english' => 'necessary',
+        'japanese' => '必要な',
+        'is_hard' => true,
+    ]);
+
+    $response = $this->patch("/words/{$word->id}/hard");
+
+    $response->assertRedirect(route('words.index'));
+
+    expect($word->fresh()->is_hard)->toBeFalse();
+});
+
+it('shows only hard words when filter is hard', function () {
+    Word::create([
+        'english' => 'apple',
+        'japanese' => 'りんご',
+        'is_hard' => false,
+    ]);
+
+    Word::create([
+        'english' => 'necessary',
+        'japanese' => '必要な',
+        'is_hard' => true,
+    ]);
+
+    $response = $this->get('/words?filter=hard');
+
+    $response->assertSuccessful()
+        ->assertSee('necessary')
+        ->assertSee('必要な')
+        ->assertDontSee('apple')
+        ->assertDontSee('りんご');
+});
+
+it('shows all words on the index page', function () {
+    Word::create([
+        'english' => 'apple',
+        'japanese' => 'りんご',
+        'is_hard' => false,
+    ]);
+
+    Word::create([
+        'english' => 'necessary',
+        'japanese' => '必要な',
+        'is_hard' => true,
+    ]);
+
+    $response = $this->get('/words');
+
+    $response->assertSuccessful()
+        ->assertSee('apple')
+        ->assertSee('りんご')
+        ->assertSee('necessary')
+        ->assertSee('必要な');
+});
+
+it('does not change english or japanese when toggling hard', function () {
+    $word = Word::create([
+        'english' => 'apple',
+        'japanese' => 'りんご',
+        'is_hard' => false,
+    ]);
+
+    $this->patch("/words/{$word->id}/hard");
+
+    $word->refresh();
+
+    expect($word->english)->toBe('apple')
+        ->and($word->japanese)->toBe('りんご')
+        ->and($word->is_hard)->toBeTrue();
+});

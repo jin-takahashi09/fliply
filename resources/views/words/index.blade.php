@@ -10,6 +10,12 @@
 
     <p><a href="{{ route('words.create') }}">単語を追加</a></p>
 
+    <p>
+        <a href="{{ route('words.index') }}" @if ($filter !== 'hard') style="font-weight: bold;" @endif>すべて</a>
+        |
+        <a href="{{ route('words.index', ['filter' => 'hard']) }}" @if ($filter === 'hard') style="font-weight: bold;" @endif>★ 難しい</a>
+    </p>
+
     @if ($words->isEmpty())
         <p>単語はまだ登録されていません。</p>
     @else
@@ -28,9 +34,14 @@
                         <td>{{ $word->english }}</td>
                         <td>{{ $word->japanese }}</td>
                         <td>
-                            @if ($word->is_hard)
-                                ★
-                            @endif
+                            <form method="POST" action="{{ route('words.toggle-hard', $word) }}" style="display: inline;">
+                                @csrf
+                                @method('PATCH')
+                                @if ($filter === 'hard')
+                                    <input type="hidden" name="filter" value="hard">
+                                @endif
+                                <button type="submit">{{ $word->is_hard ? '★' : '☆' }}</button>
+                            </form>
                         </td>
                         <td>
                             <a href="{{ route('words.edit', $word) }}">編集</a>
