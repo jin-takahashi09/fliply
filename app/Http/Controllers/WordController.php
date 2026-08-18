@@ -12,13 +12,15 @@ class WordController extends Controller
     public function index(Request $request): View
     {
         $filter = $request->query('filter');
+        $q = trim((string) $request->query('q', ''));
 
         $words = Word::query()
+            ->when($q !== '', fn ($query) => $query->where('english', 'like', '%'.$q.'%'))
             ->when($filter === 'hard', fn ($query) => $query->where('is_hard', true))
             ->orderBy('id')
             ->get();
 
-        return view('words.index', compact('words', 'filter'));
+        return view('words.index', compact('words', 'filter', 'q'));
     }
 
     public function create(): View
@@ -68,9 +70,25 @@ class WordController extends Controller
             'is_hard' => ! $word->is_hard,
         ]);
 
-        return redirect()->route(
-            'words.index',
-            $request->input('filter') === 'hard' ? ['filter' => 'hard'] : []
-        );
+        return redirect()->route('words.index', $this->indexQueryParams($request));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function indexQueryParams(Request $request): array
+    {
+        $params = [];
+
+        $q = trim((string) $request->input('q', ''));
+        if ($q !== '') {
+            $params['q'] = $q;
+        }
+
+        if ($request->input('filter') === 'hard') {
+            $params['filter'] = 'hard';
+        }
+
+        return $params;
     }
 }

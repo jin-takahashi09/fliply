@@ -233,3 +233,69 @@ it('does not change english or japanese when toggling hard', function () {
         ->and($word->japanese)->toBe('りんご')
         ->and($word->is_hard)->toBeTrue();
 });
+
+it('searches english words by partial match', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::create(['english' => 'application', 'japanese' => '応用']);
+    Word::create(['english' => 'banana', 'japanese' => 'バナナ']);
+
+    $response = $this->get('/words?q=app');
+
+    $response->assertSuccessful()
+        ->assertSee('apple')
+        ->assertSee('application')
+        ->assertDontSee('banana');
+});
+
+it('searches english words case-insensitively', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+
+    $response = $this->get('/words?q=APP');
+
+    $response->assertSuccessful()
+        ->assertSee('apple');
+});
+
+it('shows all words when the search query is empty', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::create(['english' => 'banana', 'japanese' => 'バナナ']);
+
+    $response = $this->get('/words?q=');
+
+    $response->assertSuccessful()
+        ->assertSee('apple')
+        ->assertSee('banana');
+});
+
+it('combines english search with the hard filter', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => true]);
+    Word::create(['english' => 'application', 'japanese' => '応用', 'is_hard' => false]);
+    Word::create(['english' => 'banana', 'japanese' => 'バナナ', 'is_hard' => true]);
+
+    $response = $this->get('/words?q=app&filter=hard');
+
+    $response->assertSuccessful()
+        ->assertSee('apple')
+        ->assertDontSee('application')
+        ->assertDontSee('banana');
+});
+
+it('shows an empty search result page when nothing matches', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+
+    $response = $this->get('/words?q=zzz');
+
+    $response->assertSuccessful()
+        ->assertSee('該当する単語がありません')
+        ->assertDontSee('apple');
+});
+
+it('does not search japanese translations', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+
+    $response = $this->get('/words?q=りんご');
+
+    $response->assertSuccessful()
+        ->assertSee('該当する単語がありません')
+        ->assertDontSee('apple');
+});
