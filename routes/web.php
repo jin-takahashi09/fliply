@@ -1,11 +1,15 @@
 <?php
 
+use App\Http\Controllers\DictionarySearchController;
 use App\Http\Controllers\WordController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/dictionary', [DictionarySearchController::class, 'index'])->name('dictionary.index');
+Route::get('/dictionary/suggestions', [DictionarySearchController::class, 'suggestions'])->name('dictionary.suggestions');
 
 Route::get('/words', [WordController::class, 'index'])->name('words.index');
 Route::get('/words/create', [WordController::class, 'create'])->name('words.create');
