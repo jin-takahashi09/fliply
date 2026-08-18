@@ -19,6 +19,7 @@
                     <th>英単語</th>
                     <th>日本語</th>
                     <th>難しい</th>
+                    <th>操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -30,6 +31,14 @@
                             @if ($word->is_hard)
                                 ★
                             @endif
+                        </td>
+                        <td>
+                            <a href="{{ route('words.edit', $word) }}">編集</a>
+                            <form method="POST" action="{{ route('words.destroy', $word) }}" style="display: inline;" onsubmit="return confirm('この単語を削除しますか？');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit">削除</button>
+                            </form>
                         </td>
                     </tr>
                 @endforeach

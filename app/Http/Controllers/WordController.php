@@ -32,4 +32,28 @@ class WordController extends Controller
 
         return redirect()->route('words.index');
     }
+
+    public function edit(Word $word): View
+    {
+        return view('words.edit', compact('word'));
+    }
+
+    public function update(Request $request, Word $word): RedirectResponse
+    {
+        $validated = $request->validate([
+            'english' => ['required', 'string', 'max:255'],
+            'japanese' => ['required', 'string', 'max:255'],
+        ]);
+
+        $word->update($validated);
+
+        return redirect()->route('words.index');
+    }
+
+    public function destroy(Word $word): RedirectResponse
+    {
+        $word->delete();
+
+        return redirect()->route('words.index');
+    }
 }
