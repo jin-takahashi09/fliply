@@ -1,71 +1,89 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>単語一覧 - Fliply</title>
-</head>
-<body>
-    <h1>単語一覧</h1>
+@extends('layouts.app')
 
-    <p><a href="{{ route('words.create') }}">単語を追加</a></p>
+@section('title', 'マイ単語帳 - Fliply')
 
-    <form method="GET" action="{{ route('words.index') }}">
-        @if ($filter === 'hard')
-            <input type="hidden" name="filter" value="hard">
-        @endif
-        <input type="text" name="q" value="{{ $q }}" placeholder="英単語を検索">
-        <button type="submit">検索</button>
-    </form>
+@section('content')
+    <section class="collection-head reveal">
+        <p class="eyebrow">YOUR COLLECTION</p>
+        <div class="collection-head__row">
+            <div>
+                <h1>マイ単語帳</h1>
+                <p>覚えたい言葉を、自分だけのコレクションに。</p>
+            </div>
+            <div class="collection-count">
+                <strong>{{ $words->count() }}</strong>
+                <small>WORDS</small>
+            </div>
+        </div>
+    </section>
 
-    <p>
-        <a href="{{ route('words.index', array_filter(['q' => $q ?: null])) }}" @if ($filter !== 'hard') style="font-weight: bold;" @endif>すべて</a>
-        |
-        <a href="{{ route('words.index', array_filter(['q' => $q ?: null, 'filter' => 'hard'])) }}" @if ($filter === 'hard') style="font-weight: bold;" @endif>★ 難しい</a>
-    </p>
+    <section class="collection-tools reveal reveal--delay-1">
+        <form method="GET" action="{{ route('words.index') }}" class="search-form" role="search">
+            @if ($filter === 'hard')
+                <input type="hidden" name="filter" value="hard">
+            @endif
+            <x-icon name="search" :size="19" class="search-form__icon" />
+            <input type="search" name="q" value="{{ $q }}" placeholder="英単語を検索" aria-label="英単語を検索" data-search-input>
+            <button type="submit">検索</button>
+        </form>
+
+        <div class="filter-row">
+            <a href="{{ route('words.index', array_filter(['q' => $q ?: null])) }}" class="filter-chip {{ $filter !== 'hard' ? 'is-active' : '' }}">すべて</a>
+            <a href="{{ route('words.index', array_filter(['q' => $q ?: null, 'filter' => 'hard'])) }}" class="filter-chip {{ $filter === 'hard' ? 'is-active' : '' }}">
+                <x-icon name="star" :size="13" /> 難しい
+            </a>
+            @if ($q !== '')
+                <a href="{{ route('words.index', array_filter(['filter' => $filter === 'hard' ? 'hard' : null])) }}" class="filter-chip filter-chip--clear">
+                    <x-icon name="close" :size="13" /> 検索解除
+                </a>
+            @endif
+        </div>
+    </section>
 
     @if ($words->isEmpty())
-        <p>{{ ($q !== '' || $filter === 'hard') ? '該当する単語がありません' : '単語はまだ登録されていません。' }}</p>
+        <section class="empty-state reveal reveal--delay-2">
+            <span class="empty-state__icon"><x-icon name="book" :size="30" /></span>
+            <h2>{{ ($q !== '' || $filter === 'hard') ? '該当する単語がありません' : '単語はまだ登録されていません。' }}</h2>
+            <p>{{ ($q !== '' || $filter === 'hard') ? '検索条件を変えて、もう一度試してみてください。' : '覚えたい単語を追加すると、ここに並びます。' }}</p>
+            @if ($q === '' && $filter !== 'hard')
+                <a href="{{ route('words.create') }}" class="primary-button"><x-icon name="plus" :size="17" /> 最初の単語を追加</a>
+            @endif
+        </section>
     @else
-        <table border="1" cellpadding="8" cellspacing="0">
-            <thead>
-                <tr>
-                    <th>英単語</th>
-                    <th>日本語</th>
-                    <th>難しい</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($words as $word)
-                    <tr>
-                        <td>{{ $word->english }}</td>
-                        <td>{{ $word->japanese }}</td>
-                        <td>
-                            <form method="POST" action="{{ route('words.toggle-hard', $word) }}" style="display: inline;">
-                                @csrf
-                                @method('PATCH')
-                                @if ($filter === 'hard')
-                                    <input type="hidden" name="filter" value="hard">
-                                @endif
-                                @if ($q !== '')
-                                    <input type="hidden" name="q" value="{{ $q }}">
-                                @endif
-                                <button type="submit">{{ $word->is_hard ? '★' : '☆' }}</button>
-                            </form>
-                        </td>
-                        <td>
-                            <a href="{{ route('words.edit', $word) }}">編集</a>
-                            <form method="POST" action="{{ route('words.destroy', $word) }}" style="display: inline;" onsubmit="return confirm('この単語を削除しますか？');">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit">削除</button>
-                            </form>
-                        </td>
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
+        <section class="word-list" aria-label="登録単語">
+            @foreach ($words as $word)
+                <article class="word-row {{ $word->is_hard ? 'is-hard' : '' }} reveal" style="--delay: {{ min($loop->index * 35, 280) }}ms">
+                    <span class="word-index">{{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</span>
+                    <div class="word-copy">
+                        <div class="word-copy__top">
+                            <h2>{{ $word->english }}</h2>
+                            <span>WORD</span>
+                        </div>
+                        <p>{{ $word->japanese }}</p>
+                    </div>
+                    <div class="word-actions">
+                        <form method="POST" action="{{ route('words.toggle-hard', $word) }}">
+                            @csrf
+                            @method('PATCH')
+                            @if ($filter === 'hard')<input type="hidden" name="filter" value="hard">@endif
+                            @if ($q !== '')<input type="hidden" name="q" value="{{ $q }}">@endif
+                            <button type="submit" class="icon-button star-button {{ $word->is_hard ? 'is-active' : '' }}" aria-label="{{ $word->is_hard ? '難しいから外す' : '難しい単語にする' }}">
+                                <x-icon name="star" :size="18" />
+                            </button>
+                        </form>
+                        <a href="{{ route('words.edit', $word) }}" class="icon-button" aria-label="{{ $word->english }}を編集">
+                            <x-icon name="edit" :size="18" />
+                        </a>
+                        <form method="POST" action="{{ route('words.destroy', $word) }}" data-confirm="「{{ $word->english }}」を削除しますか？">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="icon-button delete-button" aria-label="{{ $word->english }}を削除">
+                                <x-icon name="trash" :size="18" />
+                            </button>
+                        </form>
+                    </div>
+                </article>
+            @endforeach
+        </section>
     @endif
-</body>
-</html>
+@endsection

@@ -1,40 +1,19 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>単語編集 - Fliply</title>
-</head>
-<body>
-    <h1>単語編集</h1>
+@extends('layouts.app')
 
-    <p><a href="{{ route('words.index') }}">一覧へ戻る</a></p>
+@section('title', '単語を編集 - Fliply')
 
-    <form method="POST" action="{{ route('words.update', $word) }}">
-        @csrf
-        @method('PUT')
+@section('content')
+    <div class="page-back reveal">
+        <a href="{{ route('words.index') }}"><x-icon name="arrow-left" :size="17" /> 単語帳へ戻る</a>
+    </div>
 
-        <div>
-            <label for="english">英単語</label><br>
-            <input type="text" id="english" name="english" value="{{ old('english', $word->english) }}">
-            @error('english')
-                <div>{{ $message }}</div>
-            @enderror
-        </div>
+    <section class="form-heading reveal reveal--delay-1">
+        <p class="eyebrow">EDIT WORD</p>
+        <h1>{{ $word->english }}</h1>
+        <p>単語や意味、難しさの設定を編集できます。</p>
+    </section>
 
-        <br>
-
-        <div>
-            <label for="japanese">日本語</label><br>
-            <input type="text" id="japanese" name="japanese" value="{{ old('japanese', $word->japanese) }}">
-            @error('japanese')
-                <div>{{ $message }}</div>
-            @enderror
-        </div>
-
-        <br>
-
-        <button type="submit">更新</button>
-    </form>
-</body>
-</html>
+    <section class="form-card reveal reveal--delay-2">
+        @include('words._form', ['word' => $word])
+    </section>
+@endsection
