@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+
 class WordController extends Controller
 {
     public function index(Request $request): View
@@ -17,15 +18,16 @@ class WordController extends Controller
         $words = Word::query()
             ->when($q !== '', fn ($query) => $query->where('english', 'like', '%'.$q.'%'))
             ->when($filter === 'hard', fn ($query) => $query->where('is_hard', true))
+            ->when($filter === 'normal', fn ($query) => $query->where('is_hard', false))
             ->orderBy('id')
             ->get();
 
         return view('words.index', compact('words', 'filter', 'q'));
     }
 
-    public function create(): View
+    public function create(): RedirectResponse
     {
-        return view('words.create');
+        return redirect()->route('dictionary.index');
     }
 
     public function store(Request $request): RedirectResponse
@@ -85,8 +87,9 @@ class WordController extends Controller
             $params['q'] = $q;
         }
 
-        if ($request->input('filter') === 'hard') {
-            $params['filter'] = 'hard';
+        $filter = $request->input('filter');
+        if ($filter === 'hard' || $filter === 'normal') {
+            $params['filter'] = $filter;
         }
 
         return $params;
