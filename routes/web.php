@@ -1,11 +1,14 @@
 <?php
 
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\StudyController;
 use App\Http\Controllers\WordController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', HomeController::class)->name('home');
+
+Route::get('/study', [StudyController::class, 'settings'])->name('study.settings');
+Route::get('/study/session', [StudyController::class, 'session'])->name('study.session');
 
 Route::get('/words', [WordController::class, 'index'])->name('words.index');
 Route::get('/words/create', [WordController::class, 'create'])->name('words.create');
