@@ -7,6 +7,38 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Fliply セットアップ
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan dictionary:import
+php artisan serve
+```
+
+### 辞書データについて
+
+#### 英単語候補（前方一致検索）
+
+辞書候補検索には ESDB (English Speller Database / SCOWLv2) を利用しています。  
+展開済みワードリストは `storage/dictionary/wordlist.txt` に収録されています。  
+ライセンス・出典は `storage/dictionary/COPYRIGHT` を参照してください。
+
+#### 日本語意味取得
+
+英単語の日本語訳は **英語版 Wiktionary** から取得しています。  
+Wiktionary のコンテンツは [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/) のもとで公開されています。
+
+- 出典: [Wiktionary](https://en.wiktionary.org/) — The Free Dictionary
+- API: [MediaWiki Action API](https://www.mediawiki.org/wiki/API:Main_page)（認証不要、読み取りのみ）
+- ライセンス全文: https://creativecommons.org/licenses/by-sa/4.0/
+
+Wiktionary で日本語訳が取得できない場合は [DeepL API](https://www.deepl.com/) へフォールバックします。
+
+---
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

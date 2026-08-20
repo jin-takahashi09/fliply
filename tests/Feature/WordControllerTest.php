@@ -27,25 +27,23 @@ it('stores a word when valid english and japanese are submitted', function () {
 });
 
 it('returns validation error when english is empty', function () {
-    $response = $this->from(route('words.create'))->post('/words', [
+    $response = $this->from(route('words.index'))->post('/words', [
         'english' => '',
         'japanese' => 'りんご',
     ]);
 
-    $response->assertRedirect(route('words.create'))
-        ->assertSessionHasErrors('english');
+    $response->assertSessionHasErrors('english');
 
     $this->assertDatabaseCount('words', 0);
 });
 
 it('returns validation error when japanese is empty', function () {
-    $response = $this->from(route('words.create'))->post('/words', [
+    $response = $this->from(route('words.index'))->post('/words', [
         'english' => 'apple',
         'japanese' => '',
     ]);
 
-    $response->assertRedirect(route('words.create'))
-        ->assertSessionHasErrors('japanese');
+    $response->assertSessionHasErrors('japanese');
 
     $this->assertDatabaseCount('words', 0);
 });
@@ -288,6 +286,77 @@ it('shows an empty search result page when nothing matches', function () {
     $response->assertSuccessful()
         ->assertSee('該当する単語がありません')
         ->assertDontSee('apple');
+});
+
+// --- 今回追加テスト ---
+
+it('redirects GET /words/create to /dictionary', function () {
+    $response = $this->get('/words/create');
+
+    $response->assertRedirect(route('dictionary.index'));
+});
+
+it('words index page has a link to dictionary', function () {
+    $response = $this->get('/words');
+
+    $response->assertSuccessful()
+        ->assertSee(route('dictionary.index'));
+});
+
+it('shows empty message when no words are registered', function () {
+    $response = $this->get('/words');
+
+    $response->assertSuccessful()
+        ->assertSee('単語はまだ登録されていません');
+});
+
+it('shows a word added via dictionary store on the words index', function () {
+    Word::create([
+        'english' => 'apple',
+        'japanese' => 'りんご',
+        'is_hard' => false,
+    ]);
+
+    $response = $this->get('/words');
+
+    $response->assertSuccessful()
+        ->assertSee('apple')
+        ->assertSee('りんご');
+});
+
+it('shows only non-hard words when filter is normal', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
+    Word::create(['english' => 'necessary', 'japanese' => '必要な', 'is_hard' => true]);
+
+    $response = $this->get('/words?filter=normal');
+
+    $response->assertSuccessful()
+        ->assertSee('apple')
+        ->assertDontSee('necessary');
+});
+
+it('shows all words when no filter is set', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
+    Word::create(['english' => 'necessary', 'japanese' => '必要な', 'is_hard' => true]);
+
+    $response = $this->get('/words');
+
+    $response->assertSuccessful()
+        ->assertSee('apple')
+        ->assertSee('necessary');
+});
+
+it('combines english search with the normal filter', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
+    Word::create(['english' => 'application', 'japanese' => '応用', 'is_hard' => true]);
+    Word::create(['english' => 'banana', 'japanese' => 'バナナ', 'is_hard' => false]);
+
+    $response = $this->get('/words?q=app&filter=normal');
+
+    $response->assertSuccessful()
+        ->assertSee('apple')
+        ->assertDontSee('application')
+        ->assertDontSee('banana');
 });
 
 it('does not search japanese translations', function () {

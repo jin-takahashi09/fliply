@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'deepl' => [
+        'key' => env('DEEPL_API_KEY'),
+    ],
+
+    'wiktionary' => [
+        // Wikimedia policy requires a descriptive User-Agent with contact info.
+        // Not a secret; safe to commit a default value here.
+        'user_agent' => env('WIKTIONARY_USER_AGENT', 'Fliply/1.0'),
+    ],
+
 ];

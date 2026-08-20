@@ -18,9 +18,13 @@
     </section>
 
     <section class="collection-tools reveal reveal--delay-1">
+        <p><a href="{{ route('dictionary.index') }}">単語を追加</a></p>
+
         <form method="GET" action="{{ route('words.index') }}" class="search-form" role="search">
             @if ($filter === 'hard')
                 <input type="hidden" name="filter" value="hard">
+            @elseif ($filter === 'normal')
+                <input type="hidden" name="filter" value="normal">
             @endif
             <x-icon name="search" :size="19" class="search-form__icon" />
             <input type="search" name="q" value="{{ $q }}" placeholder="英単語を検索" aria-label="英単語を検索" data-search-input>
@@ -28,12 +32,15 @@
         </form>
 
         <div class="filter-row">
-            <a href="{{ route('words.index', array_filter(['q' => $q ?: null])) }}" class="filter-chip {{ $filter !== 'hard' ? 'is-active' : '' }}">すべて</a>
+            <a href="{{ route('words.index', array_filter(['q' => $q ?: null])) }}" class="filter-chip {{ ($filter !== 'hard' && $filter !== 'normal') ? 'is-active' : '' }}">すべて</a>
             <a href="{{ route('words.index', array_filter(['q' => $q ?: null, 'filter' => 'hard'])) }}" class="filter-chip {{ $filter === 'hard' ? 'is-active' : '' }}">
                 <x-icon name="star" :size="13" /> 難しい
             </a>
+            <a href="{{ route('words.index', array_filter(['q' => $q ?: null, 'filter' => 'normal'])) }}" class="filter-chip {{ $filter === 'normal' ? 'is-active' : '' }}">
+                <x-icon name="star" :size="13" /> 難しい以外
+            </a>
             @if ($q !== '')
-                <a href="{{ route('words.index', array_filter(['filter' => $filter === 'hard' ? 'hard' : null])) }}" class="filter-chip filter-chip--clear">
+                <a href="{{ route('words.index', array_filter(['filter' => in_array($filter, ['hard', 'normal'], true) ? $filter : null])) }}" class="filter-chip filter-chip--clear">
                     <x-icon name="close" :size="13" /> 検索解除
                 </a>
             @endif
@@ -43,10 +50,10 @@
     @if ($words->isEmpty())
         <section class="empty-state reveal reveal--delay-2">
             <span class="empty-state__icon"><x-icon name="book" :size="30" /></span>
-            <h2>{{ ($q !== '' || $filter === 'hard') ? '該当する単語がありません' : '単語はまだ登録されていません。' }}</h2>
-            <p>{{ ($q !== '' || $filter === 'hard') ? '検索条件を変えて、もう一度試してみてください。' : '覚えたい単語を追加すると、ここに並びます。' }}</p>
-            @if ($q === '' && $filter !== 'hard')
-                <a href="{{ route('words.create') }}" class="primary-button"><x-icon name="plus" :size="17" /> 最初の単語を追加</a>
+            <h2>{{ ($q !== '' || in_array($filter, ['hard', 'normal'], true)) ? '該当する単語がありません' : '単語はまだ登録されていません。' }}</h2>
+            <p>{{ ($q !== '' || in_array($filter, ['hard', 'normal'], true)) ? '検索条件を変えて、もう一度試してみてください。' : '覚えたい単語を追加すると、ここに並びます。' }}</p>
+            @if ($q === '' && ! in_array($filter, ['hard', 'normal'], true))
+                <a href="{{ route('dictionary.index') }}" class="primary-button"><x-icon name="plus" :size="17" /> 最初の単語を追加</a>
             @endif
         </section>
     @else
@@ -66,6 +73,7 @@
                             @csrf
                             @method('PATCH')
                             @if ($filter === 'hard')<input type="hidden" name="filter" value="hard">@endif
+                            @if ($filter === 'normal')<input type="hidden" name="filter" value="normal">@endif
                             @if ($q !== '')<input type="hidden" name="q" value="{{ $q }}">@endif
                             <button type="submit" class="icon-button star-button {{ $word->is_hard ? 'is-active' : '' }}" aria-label="{{ $word->is_hard ? '難しいから外す' : '難しい単語にする' }}">
                                 <x-icon name="star" :size="18" />
