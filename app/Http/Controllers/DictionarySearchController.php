@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\DictionaryWord;
 use App\Models\Word;
-use App\Services\DeepLClient;
+use App\Services\DictionaryMeaningsService;
 use App\Services\WiktionaryClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -84,127 +84,11 @@ class DictionarySearchController extends Controller
         ]);
     }
 
-    public function meanings(Request $request, WiktionaryClient $wiktionary, DeepLClient $deepl): JsonResponse
+    public function meanings(Request $request, DictionaryMeaningsService $meaningsService): JsonResponse
     {
         $english = trim((string) $request->query('word', ''));
 
-        if ($english === '') {
-            return response()->json([
-                'english' => '',
-                'candidates' => [],
-                'message' => '意味を取得できませんでした',
-            ]);
-        }
-
-        $wiktResult = $wiktionary->meanings($english);
-        $groups = $wiktResult['groups'];
-
-        // Meaning groups -> candidate list
-        // - each candidate corresponds to one meaning group
-        // - de-duplicate by japanese string, keeping the best prioritized group
-        // - then limit to at most 4 candidates per english word
-        $bestByJapanese = [];
-
-        foreach ($groups as $group) {
-            $groupCandidates = $group['candidates'] ?? [];
-
-            // De-duplicate Japanese candidates inside the group.
-            $deduped = [];
-            foreach ($groupCandidates as $c) {
-                if (! in_array($c, $deduped, true)) {
-                    $deduped[] = $c;
-                }
-            }
-
-            if ($deduped === []) {
-                continue;
-            }
-
-            $japanese = implode('、', $deduped);
-
-            $sourceOrder = (int) ($group['source_order'] ?? 0);
-            $isDerived = (bool) ($group['is_derived'] ?? false);
-            $labels = $group['labels'] ?? [];
-
-            // Higher score = higher priority.
-            // Base priority uses Wiktionary source order (earlier tends to be more central).
-            $score = 100000 - $sourceOrder;
-
-            // Derived senses (figurative/metaphorical/by extension) should be lower priority.
-            if ($isDerived) {
-                $score -= 5000;
-            }
-
-            // Rare/archaic/etc are not forbidden; they just come later when competing.
-            foreach ($labels as $label) {
-                $score -= 1200;
-            }
-
-            $entry = [
-                'topic' => (string) ($group['topic'] ?? ''),
-                'japanese' => $japanese,
-                'part_of_speech' => (string) ($group['part_of_speech'] ?? ''),
-                'etymology_id' => (int) ($group['etymology_id'] ?? 0),
-                'source_order' => $sourceOrder,
-                'score' => $score,
-            ];
-
-            if (! isset($bestByJapanese[$japanese]) || $entry['score'] > $bestByJapanese[$japanese]['score']) {
-                $bestByJapanese[$japanese] = $entry;
-            }
-        }
-
-        $candidates = array_values($bestByJapanese);
-
-        if ($candidates === []) {
-            // Wiktionary で日本語候補が 0 件の場合だけ DeepL へフォールバック
-            $deeplResult = $deepl->translate($english);
-
-            if ($deeplResult['ok'] && $deeplResult['translation'] !== null) {
-                $candidates = [[
-                    'topic' => '',
-                    'japanese' => $deeplResult['translation'],
-                    'part_of_speech' => '',
-                    'etymology_id' => 0,
-                    'source_order' => 0,
-                    'score' => 0,
-                ]];
-            }
-        }
-
-        // Keep maximum 4 candidates for the UI.
-        // Derived/rare senses already get penalized by score; take top-4 by score.
-        if ($candidates !== []) {
-            usort($candidates, function (array $a, array $b) {
-                if ($a['score'] === $b['score']) {
-                    return $a['source_order'] <=> $b['source_order'];
-                }
-
-                return $b['score'] <=> $a['score'];
-            });
-
-            $candidates = array_slice($candidates, 0, 4);
-        }
-
-        // registered check is english+japanese pair
-        $en = $english;
-        foreach ($candidates as &$candidate) {
-            $existing = Word::query()
-                ->where('english', $en)
-                ->where('japanese', (string) $candidate['japanese'])
-                ->first();
-
-            $candidate['registered'] = $existing !== null;
-            $candidate['word_id'] = $existing?->id;
-            unset($candidate['score'], $candidate['part_of_speech'], $candidate['etymology_id'], $candidate['source_order']);
-        }
-        unset($candidate);
-
-        return response()->json([
-            'english' => $english,
-            'candidates' => $candidates,
-            'message' => ($candidates !== []) ? null : '意味を取得できませんでした',
-        ]);
+        return response()->json($meaningsService->resolve($english));
     }
 
     public function store(Request $request): JsonResponse
