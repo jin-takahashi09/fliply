@@ -18,21 +18,35 @@ class StudyController extends Controller
 
     public function session(Request $request): View
     {
-        $direction = in_array($request->query('direction'), ['en-ja', 'ja-en'], true)
+        $direction = in_array(
+            $request->query('direction'),
+            ['en-ja', 'ja-en'],
+            true
+        )
             ? $request->query('direction')
             : 'en-ja';
-        $scope = $request->query('scope') === 'hard' ? 'hard' : 'all';
-        $order = $request->query('order') === 'random' ? 'random' : 'registered';
+
+        $scope = $request->query('scope') === 'hard'
+            ? 'hard'
+            : 'all';
 
         $words = Word::query()
-            ->when($scope === 'hard', fn ($query) => $query->where('is_hard', true))
-            ->orderBy('id')
-            ->get(['id', 'english', 'japanese', 'is_hard']);
+            ->when(
+                $scope === 'hard',
+                fn ($query) => $query->where('is_hard', true)
+            )
+            ->inRandomOrder()
+            ->get([
+                'id',
+                'english',
+                'japanese',
+                'is_hard',
+            ]);
 
-        if ($order === 'random') {
-            $words = $words->shuffle()->values();
-        }
-
-        return view('study.session', compact('words', 'direction', 'scope', 'order'));
+        return view('study.session', compact(
+            'words',
+            'direction',
+            'scope'
+        ));
     }
 }
