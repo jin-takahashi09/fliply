@@ -64,6 +64,7 @@ function fakeCanvasWiktionary(): void
 {
     Http::fake([
         'en.wiktionary.org/*' => Http::response(cacheTestWiktionaryResponse(cacheTestCanvasWikitext(), 'canvas'), 200),
+        'ja.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
     ]);
 }
 
@@ -83,7 +84,8 @@ it('returns cached canvas meanings on second request without calling Wiktionary 
 
     expect($second->json('candidates'))->toEqual($first->json('candidates'));
 
-    Http::assertSentCount(1);
+    // First request: en + ja in parallel; second hits cache only.
+    Http::assertSentCount(2);
 });
 
 it('uses the same cache key for Canvas canvas and CANVAS', function () {
@@ -92,7 +94,7 @@ it('uses the same cache key for Canvas canvas and CANVAS', function () {
     $this->getJson('/dictionary/meanings?word=Canvas')->assertSuccessful();
     $this->getJson('/dictionary/meanings?word=CANVAS')->assertSuccessful();
 
-    Http::assertSentCount(1);
+    Http::assertSentCount(2);
     expect(DictionaryMeaningsService::cacheKeyFor('Canvas'))
         ->toBe('dictionary:meanings:v1:canvas');
 });
@@ -110,12 +112,14 @@ it('caches DeepL fallback results and skips both APIs on second request', functi
     expect($first->json('candidates.0.japanese'))->toBe('アップルソース');
     expect($second->json('candidates.0.japanese'))->toBe('アップルソース');
 
-    Http::assertSentCount(2);
+    // First request: en + ja (parallel) + DeepL; second hits cache.
+    Http::assertSentCount(3);
 });
 
 it('does not cache temporary API failures and retries on the next request', function () {
     Http::fake([
         'en.wiktionary.org/*' => Http::response('error', 500),
+        'ja.wiktionary.org/*' => Http::response('error', 500),
         'api-free.deepl.com/*' => Http::response('error', 500),
     ]);
 
@@ -126,7 +130,8 @@ it('does not cache temporary API failures and retries on the next request', func
     expect($second->json('candidates'))->toBe([]);
     expect(Cache::has(DictionaryMeaningsService::cacheKeyFor('applesauce')))->toBeFalse();
 
-    Http::assertSentCount(4);
+    // Each attempt: en + ja + DeepL.
+    Http::assertSentCount(6);
 });
 
 it('reflects current registration status even when meanings are cached', function () {
@@ -145,7 +150,7 @@ it('reflects current registration status even when meanings are cached', functio
     expect($after->json('candidates.0.registered'))->toBeTrue();
     expect($after->json('candidates.0.word_id'))->not->toBeNull();
 
-    Http::assertSentCount(1);
+    Http::assertSentCount(2);
 });
 
 it('stores only meaning candidates in cache without registration fields', function () {

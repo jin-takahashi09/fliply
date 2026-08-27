@@ -30,7 +30,7 @@ class DeepLClient
         }
 
         try {
-            $response = Http::timeout(8)
+            $response = Http::timeout(4)
                 ->withHeaders(['Authorization' => 'DeepL-Auth-Key '.$key])
                 ->post(self::ENDPOINT, [
                     'text' => [$text],

@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 class WiktionaryClient
@@ -11,6 +13,8 @@ class WiktionaryClient
     private const ENDPOINT = 'https://en.wiktionary.org/w/api.php';
 
     private const JA_ENDPOINT = 'https://ja.wiktionary.org/w/api.php';
+
+    private const TIMEOUT_SECONDS = 4;
 
     /**
      * Normalize Japanese candidates extracted from Wiktionary.
@@ -72,32 +76,37 @@ class WiktionaryClient
             return ['groups' => [], 'ok' => true];
         }
 
-        $wikitext = $this->fetchWikitext($english);
+        // Fetch English and Japanese Wiktionary pages in parallel to cut fallback latency.
+        $pages = $this->fetchEnAndJaWikitext($english);
+        $wikitext = $pages['en'];
+        $jaWikitext = $pages['ja'];
 
-        if ($wikitext === null) {
+        if ($wikitext === null && $jaWikitext === null) {
             return ['groups' => [], 'ok' => false];
         }
 
-        $wikitext = $this->maybeAppendTranslationSubpage($english, $wikitext);
+        $groups = [];
 
-        $groups = $this->extractGroups($wikitext);
+        if ($wikitext !== null) {
+            $wikitext = $this->maybeAppendTranslationSubpage($english, $wikitext);
+            $groups = $this->extractGroups($wikitext);
 
-        // Some pages can appear truncated in parse&wikitext output, making Japanese candidates missing.
-        // If extraction yields 0 groups, retry with raw page content via action=query.
-        if ($groups === []) {
-            $raw = $this->fetchRawWikitext($english);
+            // Some pages can appear truncated in parse&wikitext output, making Japanese candidates missing.
+            // If extraction yields 0 groups, retry with raw page content via action=query.
+            if ($groups === []) {
+                $raw = $this->fetchRawWikitext($english);
 
-            if ($raw !== null) {
-                $raw = $this->maybeAppendTranslationSubpage($english, $raw);
-                $groups = $this->extractGroups($raw);
+                if ($raw !== null) {
+                    $raw = $this->maybeAppendTranslationSubpage($english, $raw);
+                    $groups = $this->extractGroups($raw);
+                }
             }
         }
 
         // English Wiktionary pages may omit Japanese {{t|ja|...}} entries entirely.
-        // Fall back to the Japanese Wiktionary English section, which often lists
-        // Japanese glosses in numbered definition lines such as: #[[観点]]。[[視点]]。
-        if ($groups === []) {
-            $groups = $this->fetchJaEnglishGroups($english);
+        // Fall back to the Japanese Wiktionary English section (already fetched in parallel).
+        if ($groups === [] && $jaWikitext !== null) {
+            $groups = $this->extractJaEnglishSectionGroups($jaWikitext);
         }
 
         $groups = $this->deduplicateGroups($groups);
@@ -118,20 +127,64 @@ class WiktionaryClient
     }
 
     /**
+     * @return array{en: string|null, ja: string|null}
+     */
+    private function fetchEnAndJaWikitext(string $english): array
+    {
+        $responses = Http::pool(fn (Pool $pool) => [
+            $pool->as('en')
+                ->timeout(self::TIMEOUT_SECONDS)
+                ->withUserAgent($this->userAgent())
+                ->get(self::ENDPOINT, [
+                    'action' => 'parse',
+                    'page' => $english,
+                    'prop' => 'wikitext',
+                    'format' => 'json',
+                ]),
+            $pool->as('ja')
+                ->timeout(self::TIMEOUT_SECONDS)
+                ->withUserAgent($this->userAgent())
+                ->get(self::JA_ENDPOINT, [
+                    'action' => 'parse',
+                    'page' => $english,
+                    'prop' => 'wikitext',
+                    'format' => 'json',
+                ]),
+        ]);
+
+        return [
+            'en' => $this->wikitextFromResponse($responses['en'] ?? null),
+            'ja' => $this->wikitextFromResponse($responses['ja'] ?? null),
+        ];
+    }
+
+    /**
      * Returns wikitext for the given page title, or null on any error / 429.
      */
     private function fetchWikitext(string $title): ?string
     {
         try {
-            $response = Http::timeout(8)
+            $response = Http::timeout(self::TIMEOUT_SECONDS)
                 ->withUserAgent($this->userAgent())
                 ->get(self::ENDPOINT, [
                     'action' => 'parse',
-                    'page'   => $title,
-                    'prop'   => 'wikitext',
+                    'page' => $title,
+                    'prop' => 'wikitext',
                     'format' => 'json',
                 ]);
         } catch (ConnectionException|RequestException) {
+            return null;
+        }
+
+        return $this->wikitextFromResponse($response);
+    }
+
+    /**
+     * Extract parse.wikitext.* from a Wiktionary API response.
+     */
+    private function wikitextFromResponse(mixed $response): ?string
+    {
+        if (! $response instanceof Response) {
             return null;
         }
 
@@ -158,18 +211,39 @@ class WiktionaryClient
     }
 
     /**
-     * Returns wikitext from Japanese Wiktionary, or null on any error.
+     * When a page offloads translations to a subpage (e.g. run/translations),
+     * append that subpage wikitext to the main wikitext.
      */
-    private function fetchJaWikitext(string $title): ?string
+    private function maybeAppendTranslationSubpage(string $english, string $wikitext): string
+    {
+        if (! $this->hasTranslationSubpage($wikitext)) {
+            return $wikitext;
+        }
+
+        $subWikitext = $this->fetchWikitext($english.'/translations');
+
+        if ($subWikitext !== null) {
+            return $wikitext."\n".$subWikitext;
+        }
+
+        return $wikitext;
+    }
+
+    /**
+     * Fetch raw wikitext content via action=query&prop=revisions&rvprop=content.
+     * This is used as a retry path when action=parse&wikitext appears to omit Japanese translations.
+     */
+    private function fetchRawWikitext(string $title): ?string
     {
         try {
-            $response = Http::timeout(8)
+            $response = Http::timeout(self::TIMEOUT_SECONDS)
                 ->withUserAgent($this->userAgent())
-                ->get(self::JA_ENDPOINT, [
-                    'action' => 'parse',
-                    'page'   => $title,
-                    'prop'   => 'wikitext',
+                ->get(self::ENDPOINT, [
+                    'action' => 'query',
+                    'prop' => 'revisions',
+                    'rvprop' => 'content',
                     'format' => 'json',
+                    'titles' => $title,
                 ]);
         } catch (ConnectionException|RequestException) {
             return null;
@@ -179,33 +253,16 @@ class WiktionaryClient
             return null;
         }
 
-        if (isset($response->json()['error'])) {
-            return null;
+        $json = $response->json();
+        $pages = $json['query']['pages'] ?? [];
+        foreach ($pages as $page) {
+            $content = $page['revisions'][0]['*'] ?? null;
+            if (is_string($content)) {
+                return $content;
+            }
         }
 
-        $wikitextKey = $response->json('parse.wikitext');
-
-        if (! is_array($wikitextKey) || ! isset($wikitextKey['*'])) {
-            return null;
-        }
-
-        $wikitext = $wikitextKey['*'];
-
-        return is_string($wikitext) ? $wikitext : null;
-    }
-
-    /**
-     * Extract meaning groups from the English section of a Japanese Wiktionary page.
-     */
-    private function fetchJaEnglishGroups(string $english): array
-    {
-        $wikitext = $this->fetchJaWikitext($english);
-
-        if ($wikitext === null) {
-            return [];
-        }
-
-        return $this->extractJaEnglishSectionGroups($wikitext);
+        return null;
     }
 
     /**
@@ -247,13 +304,13 @@ class WiktionaryClient
             }
 
             $groups[] = [
-                'topic'            => '',
-                'candidates'      => $candidates,
-                'part_of_speech'  => $currentPartOfSpeech,
-                'etymology_id'    => 0,
-                'source_order'    => $groupOrder++,
-                'labels'          => [],
-                'is_derived'      => false,
+                'topic' => '',
+                'candidates' => $candidates,
+                'part_of_speech' => $currentPartOfSpeech,
+                'etymology_id' => 0,
+                'source_order' => $groupOrder++,
+                'labels' => [],
+                'is_derived' => false,
             ];
         }
 
@@ -340,61 +397,6 @@ class WiktionaryClient
     private function hasTranslationSubpage(string $wikitext): bool
     {
         return str_contains(strtolower($wikitext), '{{see translation subpage');
-    }
-
-    /**
-     * When a page offloads translations to a subpage (e.g. run/translations),
-     * append that subpage wikitext to the main wikitext.
-     */
-    private function maybeAppendTranslationSubpage(string $english, string $wikitext): string
-    {
-        if (! $this->hasTranslationSubpage($wikitext)) {
-            return $wikitext;
-        }
-
-        $subWikitext = $this->fetchWikitext($english.'/translations');
-
-        if ($subWikitext !== null) {
-            return $wikitext."\n".$subWikitext;
-        }
-
-        return $wikitext;
-    }
-
-    /**
-     * Fetch raw wikitext content via action=query&prop=revisions&rvprop=content.
-     * This is used as a retry path when action=parse&wikitext appears to omit Japanese translations.
-     */
-    private function fetchRawWikitext(string $title): ?string
-    {
-        try {
-            $response = Http::timeout(10)
-                ->withUserAgent($this->userAgent())
-                ->get('https://en.wiktionary.org/w/api.php', [
-                    'action' => 'query',
-                    'prop' => 'revisions',
-                    'rvprop' => 'content',
-                    'format' => 'json',
-                    'titles' => $title,
-                ]);
-        } catch (ConnectionException|RequestException) {
-            return null;
-        }
-
-        if ($response->failed()) {
-            return null;
-        }
-
-        $json = $response->json();
-        $pages = $json['query']['pages'] ?? [];
-        foreach ($pages as $page) {
-            $content = $page['revisions'][0]['*'] ?? null;
-            if (is_string($content)) {
-                return $content;
-            }
-        }
-
-        return null;
     }
 
     /**

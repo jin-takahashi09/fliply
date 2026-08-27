@@ -21,7 +21,7 @@
 </section>
 
 
-<sectio
+<section
     class="form-card dictionary-card reveal reveal--delay-2"
     data-dictionary
     data-suggestions-url="{{ route('dictionary.suggestions') }}"
@@ -118,6 +118,8 @@
 
         // 古い検索結果を表示しないための番号
         let fetchGen = 0;
+        let meaningsGen = 0;
+        let meaningsAbort = null;
 
         const observer = new IntersectionObserver(function(entries) {
             if (entries[0].isIntersecting && hasMore && !isLoading) {
@@ -262,10 +264,18 @@
         }
 
         function loadMeanings(word) {
+            if (meaningsAbort) {
+                meaningsAbort.abort();
+            }
+
+            meaningsAbort = new AbortController();
+            const gen = ++meaningsGen;
+
             detail.innerHTML = '';
+            detail.setAttribute('aria-busy', 'true');
 
             const loading = document.createElement('p');
-            loading.className = 'dictionary-placeholder';
+            loading.className = 'dictionary-placeholder dictionary-placeholder--loading';
             loading.textContent = '意味を取得しています...';
             detail.appendChild(loading);
 
@@ -276,13 +286,30 @@
             fetch(url, {
                     headers: {
                         'Accept': 'application/json'
-                    }
+                    },
+                    signal: meaningsAbort.signal
                 })
                 .then(function(r) {
                     return r.json();
                 })
-                .then(renderDetail)
-                .catch(function() {
+                .then(function(data) {
+                    if (gen !== meaningsGen) {
+                        return;
+                    }
+
+                    detail.removeAttribute('aria-busy');
+                    renderDetail(data);
+                })
+                .catch(function(error) {
+                    if (error && error.name === 'AbortError') {
+                        return;
+                    }
+
+                    if (gen !== meaningsGen) {
+                        return;
+                    }
+
+                    detail.removeAttribute('aria-busy');
                     renderDetail({
                         english: word,
                         candidates: [],

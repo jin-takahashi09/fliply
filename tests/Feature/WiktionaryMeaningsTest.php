@@ -465,6 +465,7 @@ it('fetches run/translations only when main page has see translation subpage', f
     Http::fake([
         'en.wiktionary.org/*page=run&*' => Http::response(wiktionaryResponse(runWikitext(), 'run'), 200),
         'en.wiktionary.org/*page=run%2Ftranslations*' => Http::response(wiktionaryResponse(runTranslationsWikitext(), 'run/translations'), 200),
+        'ja.wiktionary.org/*' => Http::response(wiktionaryNotFound(), 200),
     ]);
 
     $client = app(WiktionaryClient::class);
@@ -473,13 +474,15 @@ it('fetches run/translations only when main page has see translation subpage', f
     expect($result['groups'])->toHaveCount(2);
     expect(WiktionaryClient::flattenCandidates($result['groups']))->toContain('走る');
 
-    Http::assertSentCount(2);
+    // en main + ja (parallel), then en translations subpage.
+    Http::assertSentCount(3);
 });
 
 it('returns multiple japanese candidates as separate candidates for run', function () {
     Http::fake([
         'en.wiktionary.org/*page=run&*' => Http::response(wiktionaryResponse(runWikitext(), 'run'), 200),
         'en.wiktionary.org/*page=run%2Ftranslations*' => Http::response(wiktionaryResponse(runTranslationsWikitext(), 'run/translations'), 200),
+        'ja.wiktionary.org/*' => Http::response(wiktionaryNotFound(), 200),
     ]);
 
     $response = $this->getJson('/dictionary/meanings?word=run');
@@ -494,6 +497,7 @@ it('returns noun+adjective meaning candidates for light', function () {
     Http::fake([
         'en.wiktionary.org/*page=light&*' => Http::response(wiktionaryResponse(lightWikitext(), 'light'), 200),
         'en.wiktionary.org/*page=light%2Ftranslations*' => Http::response(wiktionaryResponse(lightTranslationsWikitext(), 'light/translations'), 200),
+        'ja.wiktionary.org/*' => Http::response(wiktionaryNotFound(), 200),
     ]);
 
     $response = $this->getJson('/dictionary/meanings?word=light');

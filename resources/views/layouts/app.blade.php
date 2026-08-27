@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#0d6b5c">
     <title>@yield('title', 'Fliply')</title>
-    @vite('resources/js/app.js')
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>
     <div class="app-shell {{ ($hideNav ?? false) ? 'app-shell--focus' : '' }}">
