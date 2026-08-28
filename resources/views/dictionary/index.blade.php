@@ -29,64 +29,66 @@
     data-store-url="{{ route('dictionary.words.store') }}"
     data-destroy-url="{{ route('dictionary.words.destroy') }}">
 
-    <div class="field-group">
-        <label for="dictionary-query">
-            <span>英単語を検索</span>
-            <small>SEARCH</small>
-        </label>
+    <div class="dictionary-layout">
+        <div class="dictionary-layout__primary">
+            <div class="field-group">
+                <label for="dictionary-query">
+                    <span>英単語を検索</span>
+                    <small>SEARCH</small>
+                </label>
 
-        <div class="field-control">
-            <x-icon name="search" :size="18" />
+                <div class="field-control">
+                    <x-icon name="search" :size="18" />
 
-            <input
-                type="search"
-                id="dictionary-query"
-                placeholder="例：apple"
-                autocomplete="off"
-                spellcheck="false"
-                autofocus>
-        </div>
-    </div>
+                    <input
+                        type="search"
+                        id="dictionary-query"
+                        placeholder="例：apple"
+                        autocomplete="off"
+                        spellcheck="false"
+                        autofocus>
+                </div>
+            </div>
 
-    <p
-        id="dictionary-message"
-        class="dictionary-message"
-        aria-live="polite"></p>
-
-    {{-- 意味を候補より上に表示 --}}
-    <div class="dictionary-area dictionary-area--detail">
-        <div class="dictionary-section-head">
-            <span>意味</span>
-            <small>MEANING</small>
+            <p
+                id="dictionary-message"
+                class="dictionary-message"
+                aria-live="polite"></p>
         </div>
 
-        <div
-            id="dictionary-detail"
-            class="dictionary-detail"
-            aria-live="polite">
-            <p class="dictionary-placeholder">
-                候補を選ぶと、ここに意味が表示されます。
-            </p>
-        </div>
-    </div>
-
-    {{-- 候補一覧 --}}
-    <div class="dictionary-area dictionary-area--suggestions">
-        <div class="dictionary-section-head">
-            <span>候補</span>
-            <small>SUGGESTIONS</small>
-        </div>
-
-        <div class="dictionary-results-scroll">
-            <ul
-                id="dictionary-results"
-                class="dictionary-results"
-                aria-label="検索候補"></ul>
+        <div class="dictionary-layout__detail dictionary-area dictionary-area--detail">
+            <div class="dictionary-section-head">
+                <span>意味</span>
+                <small>MEANING</small>
+            </div>
 
             <div
-                id="dictionary-sentinel"
-                class="dictionary-sentinel"
-                aria-hidden="true"></div>
+                id="dictionary-detail"
+                class="dictionary-detail"
+                aria-live="polite">
+                <p class="dictionary-placeholder">
+                    候補を選ぶと、ここに意味が表示されます。
+                </p>
+            </div>
+        </div>
+
+        <div class="dictionary-layout__suggestions dictionary-area dictionary-area--suggestions">
+            <div class="dictionary-section-head">
+                <span>候補</span>
+                <small>SUGGESTIONS</small>
+            </div>
+
+            <div class="dictionary-results-scroll">
+                <ul
+                    id="dictionary-results"
+                    class="dictionary-results"
+                    aria-label="検索候補"></ul>
+
+                <div
+                    id="dictionary-sentinel"
+                    class="dictionary-sentinel"
+                    aria-hidden="true"></div>
+            </div>
         </div>
     </div>
     </section>

@@ -76,31 +76,33 @@
                 />
             </svg>
 
-            <div class="home-hero__copy">
-                <h1>
-                    めくるたび、<br>
-                    使える英語が<br>
-                    増えていく。
-                </h1>
+            <div class="home-hero__inner">
+                <div class="home-hero__copy">
+                    <h1>
+                        めくるたび、<br>
+                        使える英語が<br>
+                        増えていく。
+                    </h1>
 
-                <a
-                    href="{{ $hasWords ? route('study.settings') : route('words.create') }}"
-                    class="home-hero__button"
-                >
-                    {{ $hasWords ? 'カードをめくる' : '単語を追加する' }}
-                    <x-icon :name="$hasWords ? 'arrow-right' : 'plus'" :size="20" />
-                </a>
-            </div>
+                    <a
+                        href="{{ $hasWords ? route('study.settings') : route('words.create') }}"
+                        class="home-hero__button"
+                    >
+                        {{ $hasWords ? 'カードをめくる' : '単語を追加する' }}
+                        <x-icon :name="$hasWords ? 'arrow-right' : 'plus'" :size="20" />
+                    </a>
+                </div>
 
-            <div class="home-word-stack" aria-label="最新の単語">
-                <div class="home-word-card home-word-card--back" aria-hidden="true"></div>
+                <div class="home-word-stack" aria-label="最新の単語">
+                    <div class="home-word-card home-word-card--back" aria-hidden="true"></div>
 
-                <div class="home-word-card home-word-card--front">
-                    <span class="home-word-card__bookmark" aria-hidden="true"></span>
-                    <small>LATEST WORD</small>
-                    <strong>{{ $featuredWord?->english ?? 'persist' }}</strong>
-                    <span class="home-word-card__divider" aria-hidden="true"></span>
-                    <p>{{ $featuredWord?->japanese ?? '粘り強く続ける' }}</p>
+                    <div class="home-word-card home-word-card--front">
+                        <span class="home-word-card__bookmark" aria-hidden="true"></span>
+                        <small>LATEST WORD</small>
+                        <strong>{{ $featuredWord?->english ?? 'persist' }}</strong>
+                        <span class="home-word-card__divider" aria-hidden="true"></span>
+                        <p>{{ $featuredWord?->japanese ?? '粘り強く続ける' }}</p>
+                    </div>
                 </div>
             </div>
         </section>

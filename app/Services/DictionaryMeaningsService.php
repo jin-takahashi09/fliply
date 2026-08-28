@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Cache;
 
 class DictionaryMeaningsService
 {
-    public const CACHE_PREFIX = 'dictionary:meanings:v1:';
+    public const CACHE_VERSION = 'v2';
+
+    public const CACHE_PREFIX = 'dictionary:meanings:'.self::CACHE_VERSION.':';
 
     public const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
 
@@ -73,7 +75,7 @@ class DictionaryMeaningsService
     private function fetchMeanings(string $english): array
     {
         $wiktResult = $this->wiktionary->meanings($english);
-        $groups = $wiktResult['groups'];
+        $groups = $this->selectGroupsForCandidates($wiktResult['groups']);
 
         $bestByJapanese = [];
 
@@ -162,6 +164,37 @@ class DictionaryMeaningsService
             'candidates' => $normalizedCandidates,
             'message' => ($normalizedCandidates !== []) ? null : '意味を取得できませんでした',
         ];
+    }
+
+    /**
+     * Prefer normal senses over slang / informal / figurative / by-extension when both exist.
+     *
+     * @param  list<array<string, mixed>>  $groups
+     * @return list<array<string, mixed>>
+     */
+    private function selectGroupsForCandidates(array $groups): array
+    {
+        if ($groups === []) {
+            return [];
+        }
+
+        $hasNormal = false;
+
+        foreach ($groups as $group) {
+            if (! ($group['is_special'] ?? false)) {
+                $hasNormal = true;
+                break;
+            }
+        }
+
+        if (! $hasNormal) {
+            return $groups;
+        }
+
+        return array_values(array_filter(
+            $groups,
+            static fn (array $group): bool => ! ($group['is_special'] ?? false)
+        ));
     }
 
     /**

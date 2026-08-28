@@ -1,4 +1,4 @@
-<nav class="bottom-nav" aria-label="メインナビゲーション">
+<nav {{ $attributes->merge(['class' => 'bottom-nav']) }} aria-label="メインナビゲーション">
     <a href="{{ route('home') }}" class="bottom-nav__item {{ request()->routeIs('home') ? 'is-active' : '' }}">
         <x-icon name="home" />
         <span>ホーム</span>
