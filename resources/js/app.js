@@ -41,24 +41,40 @@ document.addEventListener('keydown', (event) => {
 |--------------------------------------------------------------------------
 */
 
+/*
+|--------------------------------------------------------------------------
+| Word live search
+|--------------------------------------------------------------------------
+*/
+
 const wordSearchInput = document.querySelector('[data-search-input]');
+const wordRows = document.querySelectorAll('.word-row');
 
-if (wordSearchInput) {
-    let searchTimer;
-
+if (wordSearchInput && wordRows.length > 0) {
     wordSearchInput.addEventListener('input', () => {
-        window.clearTimeout(searchTimer);
+        const keyword = wordSearchInput.value
+            .trim()
+            .toLowerCase();
 
-        searchTimer = window.setTimeout(() => {
-            const form = wordSearchInput.closest('form');
+        wordRows.forEach((row) => {
+            const english = row
+                .querySelector('.word-copy h2')
+                ?.textContent
+                .toLowerCase() || '';
 
-            if (form) {
-                form.requestSubmit();
-            }
-        }, 300);
+            const japanese = row
+                .querySelector('.word-copy p')
+                ?.textContent
+                .toLowerCase() || '';
+
+            const matches =
+                english.startsWith(keyword) ||
+                japanese.startsWith(keyword);
+
+            row.style.display = matches ? '' : 'none';
+        });
     });
 }
-
 /*
 |--------------------------------------------------------------------------
 | Toast
