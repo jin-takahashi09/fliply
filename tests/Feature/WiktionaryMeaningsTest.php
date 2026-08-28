@@ -341,6 +341,18 @@ it('does not show checkbox UI in the dictionary page html', function () {
     $response->assertDontSee('checkbox');
 });
 
+it('shows idle and empty suggestion states on the dictionary page', function () {
+    $response = $this->get('/dictionary');
+
+    $response->assertSuccessful()
+        ->assertSee('英単語を検索してみよう')
+        ->assertSee('入力すると候補がここに表示されます')
+        ->assertSee('候補が見つかりませんでした')
+        ->assertSee('別の英単語で検索してみてください')
+        ->assertSee('data-suggestions-idle', false)
+        ->assertSee('data-suggestions-empty', false);
+});
+
 it('does not render a standalone english-only heading in dictionary detail', function () {
     $content = $this->get('/dictionary')->getContent();
 

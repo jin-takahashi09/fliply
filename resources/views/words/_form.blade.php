@@ -1,12 +1,5 @@
-@php
-    $editing = isset($word);
-@endphp
-
-<form method="POST" action="{{ $editing ? route('words.update', $word) : route('words.store') }}" class="word-form">
+<form method="POST" action="{{ route('words.store') }}" class="word-form">
     @csrf
-    @if ($editing)
-        @method('PUT')
-    @endif
 
     <div class="field-group">
         <label for="english">
@@ -19,7 +12,7 @@
                 type="text"
                 id="english"
                 name="english"
-                value="{{ old('english', $word->english ?? '') }}"
+                value="{{ old('english') }}"
                 placeholder="例：resilient"
                 autocomplete="off"
                 required
@@ -42,7 +35,7 @@
                 type="text"
                 id="japanese"
                 name="japanese"
-                value="{{ old('japanese', $word->japanese ?? '') }}"
+                value="{{ old('japanese') }}"
                 placeholder="例：回復力のある、しなやかな"
                 required
             >
@@ -52,12 +45,11 @@
         @enderror
     </div>
 
-
     <div class="form-actions">
         <a href="{{ route('words.index') }}" class="secondary-button">キャンセル</a>
         <button type="submit" class="primary-button">
             <x-icon name="check" :size="17" />
-            {{ $editing ? '変更を保存' : '単語を追加' }}
+            単語を追加
         </button>
     </div>
 </form>

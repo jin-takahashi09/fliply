@@ -11,15 +11,8 @@
 </div>
 
 <section class="form-heading reveal reveal--delay-1">
-    <p class="eyebrow">ADD A WORD</p>
-
     <h1>新しい言葉を探す。</h1>
-
-    <p>
-        英単語を入力すると、辞書から候補と日本語の意味を検索できます。
-    </p>
 </section>
-
 
 <section
     class="form-card dictionary-card reveal reveal--delay-2"
@@ -34,7 +27,6 @@
             <div class="field-group">
                 <label for="dictionary-query">
                     <span>英単語を検索</span>
-                    <small>SEARCH</small>
                 </label>
 
                 <div class="field-control">
@@ -59,7 +51,6 @@
         <div class="dictionary-layout__detail dictionary-area dictionary-area--detail">
             <div class="dictionary-section-head">
                 <span>意味</span>
-                <small>MEANING</small>
             </div>
 
             <div
@@ -73,21 +64,51 @@
         </div>
 
         <div class="dictionary-layout__suggestions dictionary-area dictionary-area--suggestions">
-            <div class="dictionary-section-head">
+            <div class="dictionary-section-head dictionary-section-head--suggestions">
                 <span>候補</span>
-                <small>SUGGESTIONS</small>
+                <span class="dictionary-scroll-hint">↕ スクロール</span>
             </div>
 
-            <div class="dictionary-results-scroll">
-                <ul
-                    id="dictionary-results"
-                    class="dictionary-results"
-                    aria-label="検索候補"></ul>
-
+            <div class="dictionary-suggestions-panel">
                 <div
-                    id="dictionary-sentinel"
-                    class="dictionary-sentinel"
-                    aria-hidden="true"></div>
+                    id="dictionary-suggestions-state"
+                    class="dictionary-suggestions-empty"
+                    aria-live="polite">
+                    <div class="dictionary-suggestions-empty__view" data-suggestions-idle>
+                        <span class="dictionary-suggestions-empty__icon">
+                            <x-icon name="search" :size="22" />
+                        </span>
+                        <p class="dictionary-suggestions-empty__title">英単語を検索してみよう</p>
+                        <p class="dictionary-suggestions-empty__text">入力すると候補がここに表示されます</p>
+                    </div>
+
+                    <div class="dictionary-suggestions-empty__view" data-suggestions-loading hidden>
+                        <span class="dictionary-suggestions-empty__icon dictionary-suggestions-empty__icon--loading">
+                            <x-icon name="search" :size="22" />
+                        </span>
+                        <p class="dictionary-suggestions-empty__title">検索中...</p>
+                    </div>
+
+                    <div class="dictionary-suggestions-empty__view" data-suggestions-empty hidden>
+                        <span class="dictionary-suggestions-empty__icon">
+                            <x-icon name="book" :size="22" />
+                        </span>
+                        <p class="dictionary-suggestions-empty__title">候補が見つかりませんでした</p>
+                        <p class="dictionary-suggestions-empty__text">別の英単語で検索してみてください</p>
+                    </div>
+                </div>
+
+                <div class="dictionary-results-scroll" id="dictionary-results-scroll" hidden>
+                    <ul
+                        id="dictionary-results"
+                        class="dictionary-results"
+                        aria-label="検索候補"></ul>
+
+                    <div
+                        id="dictionary-sentinel"
+                        class="dictionary-sentinel"
+                        aria-hidden="true"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -99,7 +120,14 @@
         const message = document.getElementById('dictionary-message');
         const detail = document.getElementById('dictionary-detail');
         const sentinel = document.getElementById('dictionary-sentinel');
-        const resultsScroll = document.querySelector('.dictionary-results-scroll');
+        const resultsScroll = document.getElementById('dictionary-results-scroll');
+        const suggestionsArea = document.querySelector('.dictionary-area--suggestions');
+        const suggestionsPanel = document.querySelector('.dictionary-suggestions-panel');
+        const suggestionsState = document.getElementById('dictionary-suggestions-state');
+        const scrollHint = document.querySelector('.dictionary-scroll-hint');
+        const suggestionsIdleView = document.querySelector('[data-suggestions-idle]');
+        const suggestionsLoadingView = document.querySelector('[data-suggestions-loading]');
+        const suggestionsEmptyView = document.querySelector('[data-suggestions-empty]');
 
         const csrfToken = document
             .querySelector('meta[name="csrf-token"]')
@@ -134,6 +162,53 @@
 
         observer.observe(sentinel);
 
+        function setSuggestionsView(mode) {
+            const showResults = mode === 'results';
+
+            if (resultsScroll) {
+                resultsScroll.hidden = !showResults;
+            }
+
+            if (suggestionsState) {
+                suggestionsState.hidden = showResults;
+            }
+
+            suggestionsIdleView?.toggleAttribute('hidden', mode !== 'idle');
+            suggestionsLoadingView?.toggleAttribute('hidden', mode !== 'loading');
+            suggestionsEmptyView?.toggleAttribute('hidden', mode !== 'empty');
+
+            suggestionsArea?.classList.toggle('has-results', showResults);
+            suggestionsPanel?.classList.toggle('has-results', showResults);
+
+            refreshSuggestionsPanelState();
+        }
+
+        function refreshSuggestionsPanelState() {
+            if (!resultsScroll || !suggestionsPanel) {
+                return;
+            }
+
+            const scrollable =
+                !resultsScroll.hidden &&
+                resultsScroll.scrollHeight > resultsScroll.clientHeight + 2;
+            const atBottom =
+                resultsScroll.scrollTop + resultsScroll.clientHeight >=
+                resultsScroll.scrollHeight - 4;
+
+            suggestionsPanel.classList.toggle('is-scrollable', scrollable);
+            suggestionsPanel.classList.toggle('is-at-bottom', atBottom);
+
+            if (scrollHint) {
+                scrollHint.hidden = !scrollable;
+            }
+        }
+
+        resultsScroll?.addEventListener(
+            'scroll',
+            refreshSuggestionsPanelState,
+            { passive: true },
+        );
+
         input.addEventListener('input', function() {
             clearTimeout(debounceId);
 
@@ -166,15 +241,18 @@
             showPlaceholder();
 
             if (q === '') {
+                setSuggestionsView('idle');
                 return;
             }
 
             // 英字とアポストロフィのみ許可
             if (!/^[a-zA-Z']+$/.test(q) || !/[a-zA-Z]/.test(q)) {
                 message.textContent = "英字とアポストロフィ（'）のみ入力できます。";
+                setSuggestionsView('idle');
                 return;
             }
 
+            setSuggestionsView('loading');
             loadPage(q, 0);
         }
 
@@ -186,10 +264,6 @@
             isLoading = true;
 
             const gen = fetchGen;
-
-            if (offset === 0) {
-                message.textContent = '検索中...';
-            }
 
             const url = new URL(suggestionsUrl, window.location.origin);
 
@@ -242,12 +316,12 @@
                     currentOffset = offset + words.length;
                     hasMore = data.has_more || false;
 
-                    if (
-                        offset === 0 &&
-                        words.length === 0 &&
-                        !data.message
-                    ) {
-                        message.textContent = '候補が見つかりませんでした。';
+                    if (offset === 0) {
+                        if (words.length === 0 && !data.message) {
+                            setSuggestionsView('empty');
+                        } else if (words.length > 0) {
+                            setSuggestionsView('results');
+                        }
                     }
                 })
                 .catch(function() {
@@ -257,10 +331,15 @@
 
                     message.textContent = '単語を取得できませんでした';
                     hasMore = false;
+
+                    if (offset === 0) {
+                        setSuggestionsView('empty');
+                    }
                 })
                 .finally(function() {
                     if (gen === fetchGen) {
                         isLoading = false;
+                        refreshSuggestionsPanelState();
                     }
                 });
         }
