@@ -12,7 +12,10 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="{{ request()->routeIs('home') ? 'page-home' : '' }}">
+<body @class([
+    'page-home' => request()->routeIs('home'),
+    'page-words' => request()->routeIs('words.index'),
+])>
 <div class="app-shell {{ ($hideNav ?? false) ? 'app-shell--focus' : '' }}">
     @if ($compactHeader ?? false)
     <header class="focus-header">
@@ -22,17 +25,11 @@
     <header class="app-header app-header--mobile">
         <a href="{{ route('home') }}" class="brand" aria-label="Fliply ホーム">
             <span class="brand__mark">
-                <x-icon
-                    :name="request()->routeIs('home') ? 'fliply-mark' : 'layers'"
-                    :size="24" />
+                <x-icon name="fliply-mark" :size="24" />
             </span>
 
             <span class="brand__name">Fliply</span>
         </a>
-
-        @unless (request()->routeIs('home'))
-        <span class="brand__line">Words that stay.</span>
-        @endunless
     </header>
     @endif
 

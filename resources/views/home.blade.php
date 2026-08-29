@@ -177,7 +177,7 @@
                 </div>
 
                 <a href="{{ route('words.index') }}">
-                    すべて見る
+                    一覧を見る
                 </a>
             </div>
 
