@@ -96,7 +96,7 @@ it('uses the same cache key for Canvas canvas and CANVAS', function () {
 
     Http::assertSentCount(2);
     expect(DictionaryMeaningsService::cacheKeyFor('Canvas'))
-        ->toBe('dictionary:meanings:v2:canvas');
+        ->toBe('dictionary:meanings:v3:canvas');
 });
 
 it('caches DeepL fallback results and skips both APIs on second request', function () {
@@ -126,8 +126,8 @@ it('does not cache temporary API failures and retries on the next request', func
     $first = $this->getJson('/dictionary/meanings?word=applesauce')->assertSuccessful();
     $second = $this->getJson('/dictionary/meanings?word=applesauce')->assertSuccessful();
 
-    expect($first->json('candidates'))->toBe([]);
-    expect($second->json('candidates'))->toBe([]);
+    expect($first->json('candidates.0.japanese'))->toBe('applesauce');
+    expect($second->json('candidates.0.japanese'))->toBe('applesauce');
     expect(Cache::has(DictionaryMeaningsService::cacheKeyFor('applesauce')))->toBeFalse();
 
     // Each attempt: en + ja + DeepL.
@@ -271,7 +271,7 @@ it('caches meanings for seven days', function () {
         );
 });
 
-it('uses cache version v2 and ignores stale v1 cache entries', function () {
+it('uses cache version v3 and ignores stale v1 cache entries', function () {
     fakeCanvasWiktionary();
 
     Cache::put('dictionary:meanings:v1:canvas', [
@@ -287,7 +287,100 @@ it('uses cache version v2 and ignores stale v1 cache entries', function () {
 
     expect($japaneseValues)->not->toContain('古いキャッシュ')
         ->and(DictionaryMeaningsService::cacheKeyFor('canvas'))
-        ->toBe('dictionary:meanings:v2:canvas');
+        ->toBe('dictionary:meanings:v3:canvas');
 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'en.wiktionary.org'));
+});
+
+it('ignores stale v2 cache with English-only wabbit meaning and refetches', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'ja.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('ウサギ'), 200),
+    ]);
+
+    Cache::put('dictionary:meanings:v2:wabbit', [
+        'english' => 'wabbit',
+        'candidates' => [
+            ['topic' => '', 'japanese' => 'wabbit (wabit)'],
+        ],
+        'message' => null,
+    ], 3600);
+
+    $response = $this->getJson('/dictionary/meanings?word=wabbit')->assertSuccessful();
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toContain('ウサギ')
+        ->and($japaneseValues)->not->toContain('wabbit (wabit)')
+        ->and($japaneseValues)->not->toContain('wabbit')
+        ->and(DictionaryMeaningsService::cacheKeyFor('wabbit'))
+        ->toBe('dictionary:meanings:v3:wabbit');
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'deepl.com'));
+});
+
+it('uses stale v2 cache miss to store english fallback in v3 when DeepL returns English', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'ja.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('wabbit'), 200),
+    ]);
+
+    Cache::put('dictionary:meanings:v2:wabbit', [
+        'english' => 'wabbit',
+        'candidates' => [
+            ['topic' => '', 'japanese' => 'wabbit (wabit)'],
+        ],
+        'message' => null,
+    ], 3600);
+
+    $response = $this->getJson('/dictionary/meanings?word=wabbit')->assertSuccessful();
+
+    expect($response->json('candidates.0.japanese'))->toBe('wabbit')
+        ->and($response->json('message'))->toBeNull()
+        ->and(Cache::get(DictionaryMeaningsService::cacheKeyFor('wabbit')))
+        ->toBe([
+            'english' => 'wabbit',
+            'candidates' => [
+                ['topic' => '', 'japanese' => 'wabbit'],
+            ],
+            'message' => null,
+        ]);
+});
+
+it('uses valid english fallback v3 cache without refetching', function () {
+    Cache::put(DictionaryMeaningsService::cacheKeyFor('wabbit'), [
+        'english' => 'wabbit',
+        'candidates' => [
+            ['topic' => '', 'japanese' => 'wabbit'],
+        ],
+        'message' => null,
+    ], 3600);
+
+    Http::fake();
+
+    $response = $this->getJson('/dictionary/meanings?word=wabbit')->assertSuccessful();
+
+    expect($response->json('candidates.0.japanese'))->toBe('wabbit');
+
+    Http::assertNothingSent();
+});
+
+it('uses valid Japanese v3 cache without refetching', function () {
+    Cache::put(DictionaryMeaningsService::cacheKeyFor('canvas'), [
+        'english' => 'canvas',
+        'candidates' => [
+            ['topic' => 'type of coarse cloth', 'japanese' => '帆布、ズック'],
+        ],
+        'message' => null,
+    ], 3600);
+
+    Http::fake();
+
+    $response = $this->getJson('/dictionary/meanings?word=canvas')->assertSuccessful();
+
+    expect(collect($response->json('candidates'))->pluck('japanese')->all())
+        ->toBe(['帆布、ズック']);
+
+    Http::assertNothingSent();
 });

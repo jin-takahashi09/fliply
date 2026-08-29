@@ -89,28 +89,37 @@ class WiktionaryClient
 
         if ($wikitext !== null) {
             $wikitext = $this->maybeAppendTranslationSubpage($english, $wikitext);
-            $groups = $this->extractGroups($wikitext);
+            $groups = $this->filterGroupsWithValidJapaneseCandidates(
+                $this->extractGroups($wikitext)
+            );
 
             // Some pages can appear truncated in parse&wikitext output, making Japanese candidates missing.
-            // If extraction yields 0 groups, retry with raw page content via action=query.
+            // If extraction yields 0 valid groups, retry with raw page content via action=query.
             if ($groups === []) {
                 $raw = $this->fetchRawWikitext($english);
 
                 if ($raw !== null) {
                     $raw = $this->maybeAppendTranslationSubpage($english, $raw);
-                    $groups = $this->extractGroups($raw);
+                    $groups = $this->filterGroupsWithValidJapaneseCandidates(
+                        $this->extractGroups($raw)
+                    );
                 }
             }
         }
 
-        // English Wiktionary pages may omit Japanese {{t|ja|...}} entries entirely.
+        // English Wiktionary pages may omit Japanese {{t|ja|...}} entries entirely,
+        // or only list English-like strings under {{t|ja|...}} (e.g. wabbit (wabit)).
         // Fall back to the Japanese Wiktionary English section (already fetched in parallel).
         if ($groups === [] && $jaWikitext !== null) {
-            $groups = $this->extractJaEnglishSectionGroups($jaWikitext);
+            $groups = $this->filterGroupsWithValidJapaneseCandidates(
+                $this->extractJaEnglishSectionGroups($jaWikitext)
+            );
         }
 
         $groups = $this->deduplicateGroups($groups);
+        $groups = $this->filterGroupsWithValidJapaneseCandidates($groups);
         $groups = $this->deduplicateCandidatesAcrossGroups($groups, $english);
+        $groups = $this->filterGroupsWithValidJapaneseCandidates($groups);
 
         return ['groups' => $groups, 'ok' => true];
     }
@@ -386,9 +395,56 @@ class WiktionaryClient
         return $candidates;
     }
 
+    /**
+     * Whether a string contains at least one Hiragana, Katakana, or Han character.
+     */
+    public static function isValidJapaneseMeaning(string $text): bool
+    {
+        $text = self::normalizeJapaneseCandidate($text);
+
+        if ($text === '') {
+            return false;
+        }
+
+        return self::containsJapanese($text);
+    }
+
     private static function containsJapanese(string $text): bool
     {
-        return preg_match('/[\x{3000}-\x{9FFF}\x{F900}-\x{FAFF}]/u', $text) === 1;
+        // Script= is required: bare \p{Hiragana} etc. also match CJK punctuation in PHP.
+        return preg_match('/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u', $text) === 1;
+    }
+
+    /**
+     * Keep only groups whose candidates contain Japanese script.
+     *
+     * @param  list<array{topic: string, candidates: list<string>}>  $groups
+     * @return list<array{topic: string, candidates: list<string>}>
+     */
+    private function filterGroupsWithValidJapaneseCandidates(array $groups): array
+    {
+        $filtered = [];
+
+        foreach ($groups as $group) {
+            $candidates = [];
+
+            foreach ($group['candidates'] ?? [] as $candidate) {
+                $normalized = self::normalizeJapaneseCandidate((string) $candidate);
+
+                if ($normalized !== '' && self::containsJapanese($normalized)) {
+                    $candidates[] = $normalized;
+                }
+            }
+
+            if ($candidates === []) {
+                continue;
+            }
+
+            $group['candidates'] = $candidates;
+            $filtered[] = $group;
+        }
+
+        return $filtered;
     }
 
     // -------------------------------------------------------------------------
@@ -511,7 +567,9 @@ class WiktionaryClient
                 foreach ($matches[1] as $raw) {
                     $candidate = self::normalizeJapaneseCandidate((string) $raw);
 
-                    if ($candidate !== '' && ! in_array($candidate, $currentCandidates, true)) {
+                    if ($candidate !== ''
+                        && self::containsJapanese($candidate)
+                        && ! in_array($candidate, $currentCandidates, true)) {
                         $currentCandidates[] = $candidate;
                     }
                 }

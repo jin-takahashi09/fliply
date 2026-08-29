@@ -125,6 +125,18 @@ function appleWithSlangWikitext(): string
 WIKITEXT;
 }
 
+function wabbitWikitext(): string
+{
+    return <<<'WIKITEXT'
+==English==
+===Noun===
+====Translations====
+{{trans-top|informal term for rabbit}}
+* Japanese: {{t+|ja|wabbit (wabit)}}
+{{trans-bottom}}
+WIKITEXT;
+}
+
 function generalWithLabelWikitext(string $label, string $specialJapanese, string $normalJapanese = '通常'): string
 {
     return <<<WIKITEXT
@@ -150,6 +162,18 @@ function slangOnlyWikitext(): string
 {{trans-top|slang term}}
 {{qualifier|slang}}
 * Japanese: {{t+|ja|俗語訳|tr=zokugoyaku}}
+{{trans-bottom}}
+WIKITEXT;
+}
+
+function mixedJapaneseEnglishWikitext(): string
+{
+    return <<<'WIKITEXT'
+==English==
+===Noun===
+====Translations====
+{{trans-top|point of view}}
+* Japanese: {{t+|ja|観点 (viewpoint)}}, {{t+|ja|視点|tr=shiten}}
 {{trans-bottom}}
 WIKITEXT;
 }
@@ -930,7 +954,7 @@ it('falls back to DeepL when Wiktionary returns 5xx', function () {
     $response->assertJsonPath('candidates.0.japanese', 'アップルソース');
 });
 
-it('returns failure message when both Wiktionary and DeepL fail', function () {
+it('returns the searched english word when both Wiktionary and DeepL fail', function () {
     Http::fake([
         'en.wiktionary.org/*' => Http::response('error', 500),
         'api-free.deepl.com/*' => Http::response('error', 500),
@@ -938,7 +962,129 @@ it('returns failure message when both Wiktionary and DeepL fail', function () {
 
     $response = $this->getJson('/dictionary/meanings?word=applesauce');
     $response->assertSuccessful();
-    $response->assertJsonPath('candidates', []);
-    $response->assertJsonPath('message', '意味を取得できませんでした');
+    $response->assertJsonPath('candidates.0.japanese', 'applesauce');
+    $response->assertJsonPath('message', null);
+});
+
+it('rejects English-only Wiktionary ja templates and falls back to DeepL', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(wabbitWikitext(), 'wabbit'), 200),
+        'ja.wiktionary.org/*' => Http::response(wiktionaryNotFound(), 200),
+        'api-free.deepl.com/*' => Http::response(wiktDeeplResponse('ウサギ'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=wabbit');
+    $response->assertSuccessful();
+
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toContain('ウサギ')
+        ->and($japaneseValues)->not->toContain('wabbit (wabit)');
+
+    Http::assertSent(fn ($r) => str_contains($r->url(), 'deepl.com'));
+});
+
+it('does not accept English-only DeepL translations as Japanese meanings and falls back to the searched word', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(wabbitWikitext(), 'wabbit'), 200),
+        'ja.wiktionary.org/*' => Http::response(wiktionaryNotFound(), 200),
+        'api-free.deepl.com/*' => Http::response(wiktDeeplResponse('wabbit'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=wabbit');
+    $response->assertSuccessful();
+
+    expect($response->json('candidates.0.japanese'))->toBe('wabbit')
+        ->and(collect($response->json('candidates'))->pluck('japanese')->all())
+        ->not->toContain('wabbit (wabit)')
+        ->and($response->json('message'))->toBeNull();
+});
+
+it('falls back to ja.wiktionary when en.wiktionary only has English-like ja templates', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(wabbitWikitext(), 'wabbit'), 200),
+        'ja.wiktionary.org/*' => Http::response(wiktionaryResponse(perspectiveJaWikitext(), 'wabbit'), 200),
+        'api-free.deepl.com/*' => Http::response(wiktDeeplResponse('SHOULD_NOT_BE_USED'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=wabbit');
+    $response->assertSuccessful();
+
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->not->toBeEmpty()
+        ->and($japaneseValues)->not->toContain('wabbit (wabit)');
+
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'deepl.com'));
+});
+
+it('keeps Japanese candidates that also contain Latin letters or symbols', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(mixedJapaneseEnglishWikitext(), 'perspective'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=perspective');
+    $response->assertSuccessful();
+
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toContain('観点 (viewpoint)、視点');
+});
+
+it('validates Japanese meaning strings for dictionary registration', function () {
+    expect(WiktionaryClient::isValidJapaneseMeaning('りんご'))->toBeTrue()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('リンゴ'))->toBeTrue()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('林檎'))->toBeTrue()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('観点'))->toBeTrue()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('AI技術'))->toBeTrue()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('version 2 の説明'))->toBeTrue()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('観点 (viewpoint)'))->toBeTrue()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('wabbit'))->toBeFalse()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('wabbit (wabit)'))->toBeFalse()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('apple'))->toBeFalse()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('slang'))->toBeFalse()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('()'))->toBeFalse()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('、'))->toBeFalse()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('。'))->toBeFalse()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('「」'))->toBeFalse()
+        ->and(WiktionaryClient::isValidJapaneseMeaning('Noun'))->toBeFalse();
+});
+
+it('does not add the searched English word when Japanese meanings exist', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(appleWikitext(), 'apple'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=apple');
+    $response->assertSuccessful();
+
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->not->toBeEmpty()
+        ->and($japaneseValues)->not->toContain('apple');
+});
+
+it('allows dictionary store when japanese matches the searched english fallback', function () {
+    $response = $this->postJson('/dictionary/words', [
+        'english' => 'wabbit',
+        'japanese' => 'wabbit',
+    ]);
+
+    $response->assertSuccessful()
+        ->assertJsonPath('ok', true);
+
+    expect(Word::query()->where('english', 'wabbit')->where('japanese', 'wabbit')->exists())->toBeTrue();
+});
+
+it('rejects dictionary store when japanese contains no Japanese script', function () {
+    $response = $this->postJson('/dictionary/words', [
+        'english' => 'wabbit',
+        'japanese' => 'wabbit (wabit)',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonPath('ok', false);
+
+    expect(Word::query()->where('english', 'wabbit')->exists())->toBeFalse();
 });
 
