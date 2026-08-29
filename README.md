@@ -35,10 +35,10 @@ Fliply は、覚えたい英単語を自分で選び、カード学習で繰り�
 ## チームメンバー
 
 
-| 名前  | 担当                 | GitHub                                                                   |
-| --- | ------------------ | ------------------------------------------------------------------------ |
-| 伊藤秀 | フロントエンドエンジニアデザイナー | [https://github.com/shuito124](https://github.com/shuito124)             |
-| 高橋仁 | バックエンドエンジニア        | [https://github.com/jin-takahashi09](https://github.com/jin-takahashi09) |
+| 名前  | 担当 | GitHub |
+| --- | --- | --- |
+| 伊藤秀 | フロントエンドエンジニア<br>デザイナー | [https://github.com/shuito124](https://github.com/shuito124) |
+| 高橋仁 | バックエンドエンジニア | [https://github.com/jin-takahashi09](https://github.com/jin-takahashi09) |
 
 
 ---
