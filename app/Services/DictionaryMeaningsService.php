@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Cache;
 
 class DictionaryMeaningsService
 {
-    public const CACHE_VERSION = 'v2';
+    public const CACHE_VERSION = 'v3';
 
     public const CACHE_PREFIX = 'dictionary:meanings:'.self::CACHE_VERSION.':';
 
@@ -42,16 +42,20 @@ class DictionaryMeaningsService
         $cached = Cache::get($cacheKey);
 
         if (is_array($cached)) {
-            return $this->attachRegistrationStatus($english, $cached);
+            $cached = $this->filterPayloadCandidates($cached);
+
+            if (($cached['candidates'] ?? []) !== []) {
+                return $this->attachRegistrationStatus($english, $cached);
+            }
         }
 
         $payload = $this->fetchMeanings($english);
 
-        if ($this->shouldCache($payload)) {
-            Cache::put($cacheKey, $payload, self::CACHE_TTL_SECONDS);
+        if ($this->shouldCache($payload, $english)) {
+            Cache::put($cacheKey, $this->stripCacheMetadata($payload), self::CACHE_TTL_SECONDS);
         }
 
-        return $this->attachRegistrationStatus($english, $payload);
+        return $this->attachRegistrationStatus($english, $this->stripCacheMetadata($payload));
     }
 
     public static function cacheKeyFor(string $english): string
@@ -60,11 +64,54 @@ class DictionaryMeaningsService
     }
 
     /**
-     * @param  array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null}  $payload
+     * Whether a meaning candidate is the official English fallback for the searched word.
      */
-    private function shouldCache(array $payload): bool
+    public static function isEnglishFallbackMeaning(string $english, string $japanese): bool
     {
-        return ($payload['candidates'] ?? []) !== [];
+        $english = trim($english);
+        $japanese = WiktionaryClient::normalizeJapaneseCandidate($japanese);
+
+        return $english !== '' && $english === $japanese;
+    }
+
+    /**
+     * Whether a meaning candidate may be shown or registered for the searched word.
+     */
+    public static function isAcceptableMeaningCandidate(string $english, string $japanese): bool
+    {
+        return WiktionaryClient::isValidJapaneseMeaning($japanese)
+            || self::isEnglishFallbackMeaning($english, $japanese);
+    }
+
+    /**
+     * @param  array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null, cache?: bool}  $payload
+     */
+    private function shouldCache(array $payload, string $english): bool
+    {
+        if (($payload['candidates'] ?? []) === []) {
+            return false;
+        }
+
+        if (array_key_exists('cache', $payload)) {
+            return (bool) $payload['cache'];
+        }
+
+        return collect($payload['candidates'] ?? [])
+            ->contains(fn (array $candidate): bool => WiktionaryClient::isValidJapaneseMeaning((string) ($candidate['japanese'] ?? ''))
+                || self::isEnglishFallbackMeaning($english, (string) ($candidate['japanese'] ?? '')));
+    }
+
+    /**
+     * @param  array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null, cache?: bool}  $payload
+     * @return array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null}
+     */
+    private function stripCacheMetadata(array $payload): array
+    {
+        return [
+            'english' => (string) ($payload['english'] ?? ''),
+            'candidates' => $payload['candidates'] ?? [],
+            'message' => $payload['message'] ?? null,
+        ];
     }
 
     /**
@@ -84,8 +131,14 @@ class DictionaryMeaningsService
 
             $deduped = [];
             foreach ($groupCandidates as $c) {
-                if (! in_array($c, $deduped, true)) {
-                    $deduped[] = $c;
+                if (! WiktionaryClient::isValidJapaneseMeaning((string) $c)) {
+                    continue;
+                }
+
+                $normalized = WiktionaryClient::normalizeJapaneseCandidate((string) $c);
+
+                if (! in_array($normalized, $deduped, true)) {
+                    $deduped[] = $normalized;
                 }
             }
 
@@ -124,19 +177,26 @@ class DictionaryMeaningsService
         }
 
         $candidates = array_values($bestByJapanese);
+        $hasJapaneseFromWiktionary = $candidates !== [];
+        $deeplOk = false;
 
         if ($candidates === []) {
             $deeplResult = $this->deepl->translate($english);
+            $deeplOk = $deeplResult['ok'];
 
             if ($deeplResult['ok'] && $deeplResult['translation'] !== null) {
-                $candidates = [[
-                    'topic' => '',
-                    'japanese' => $deeplResult['translation'],
-                    'part_of_speech' => '',
-                    'etymology_id' => 0,
-                    'source_order' => 0,
-                    'score' => 0,
-                ]];
+                $translation = WiktionaryClient::normalizeJapaneseCandidate($deeplResult['translation']);
+
+                if (WiktionaryClient::isValidJapaneseMeaning($translation)) {
+                    $candidates = [[
+                        'topic' => '',
+                        'japanese' => $translation,
+                        'part_of_speech' => '',
+                        'etymology_id' => 0,
+                        'source_order' => 0,
+                        'score' => 0,
+                    ]];
+                }
             }
         }
 
@@ -159,10 +219,58 @@ class DictionaryMeaningsService
             ];
         }, $candidates);
 
-        return [
+        if ($normalizedCandidates === []) {
+            $normalizedCandidates = [[
+                'topic' => '',
+                'japanese' => $english,
+            ]];
+        }
+
+        $payload = $this->filterPayloadCandidates([
             'english' => $english,
             'candidates' => $normalizedCandidates,
-            'message' => ($normalizedCandidates !== []) ? null : '意味を取得できませんでした',
+            'message' => null,
+        ]);
+
+        $hasJapaneseCandidate = collect($payload['candidates'] ?? [])
+            ->contains(fn (array $candidate): bool => WiktionaryClient::isValidJapaneseMeaning((string) ($candidate['japanese'] ?? '')));
+
+        $payload['cache'] = $hasJapaneseCandidate
+            || $hasJapaneseFromWiktionary
+            || ($deeplOk ?? false)
+            || ($wiktResult['ok'] ?? false);
+
+        return $payload;
+    }
+
+    /**
+     * Keep acceptable meaning candidates: valid Japanese, or the searched English word itself.
+     *
+     * @param  array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null}  $payload
+     * @return array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null}
+     */
+    private function filterPayloadCandidates(array $payload): array
+    {
+        $english = trim((string) ($payload['english'] ?? ''));
+        $candidates = [];
+
+        foreach ($payload['candidates'] ?? [] as $candidate) {
+            $japanese = WiktionaryClient::normalizeJapaneseCandidate((string) ($candidate['japanese'] ?? ''));
+
+            if (! self::isAcceptableMeaningCandidate($english, $japanese)) {
+                continue;
+            }
+
+            $candidates[] = [
+                'topic' => (string) ($candidate['topic'] ?? ''),
+                'japanese' => $japanese,
+            ];
+        }
+
+        return [
+            'english' => $english,
+            'candidates' => $candidates,
+            'message' => ($candidates !== []) ? null : '意味を取得できませんでした',
         ];
     }
 

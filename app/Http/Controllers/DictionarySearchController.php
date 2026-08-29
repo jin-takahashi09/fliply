@@ -101,6 +101,16 @@ class DictionarySearchController extends Controller
 
         $validated['japanese'] = WiktionaryClient::normalizeJapaneseCandidate((string) $validated['japanese']);
 
+        if (! DictionaryMeaningsService::isAcceptableMeaningCandidate(
+            (string) $validated['english'],
+            $validated['japanese']
+        )) {
+            return response()->json([
+                'ok' => false,
+                'message' => '日本語の意味を選択してください',
+            ], 422);
+        }
+
         if (Word::query()
             ->where('english', $validated['english'])
             ->where('japanese', $validated['japanese'])
