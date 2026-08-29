@@ -1,58 +1,141 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Fliply
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+英単語学習アプリです。  
+辞書から単語を探して登録し、フラッシュカードで「めくりながら」定着させられます。
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## アプリケーション概要
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Fliply は、覚えたい英単語を自分で選び、カード学習で繰り返し復習できる Web アプリです。
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+単語の選定から復習までを一つの流れにつなぎ、使える英語を少しずつ増やしていけるように制作しました。
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## サービスへの想い
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+単語帳に登録したはずなのに、いざ使う場面で出てこない。  
+意味は覚えたつもりでも、繰り返し触れないとすぐに薄れてしまう。  
+そんな経験は、英語学習のなかでよくあることだと思います。
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+一方で、最初から大量の単語を覚えようとしても続きにくいものです。  
+自分が今必要としている語、気になった語から始めるほうが、学習は続きやすく、記憶にも残りやすいと考えました。
 
-## Agentic Development
+そこで Fliply では、まず辞書から単語を探し、意味を確認して自分の単語帳へ入れるところを入り口にしました。  
+そのうえで、カードをめくりながら繰り返し触れることで、単語を「知っている」から「使える」へ近づけていく。
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+めくるたびに、使える英語が増えていく。  
+私たちは、そのような学習体験を目指して制作を進めました。
+
+---
+
+## 主な機能
+
+
+| 機能      | 内容                                                            |
+| ------- | ------------------------------------------------------------- |
+| ホーム     | 学習の入口。登録単語数・難しい単語数、最新単語の表示                                    |
+| 辞書検索    | 英単語の前方一致候補（ESDB ワードリスト）。意味は Wiktionary 優先、なければ DeepL へフォールバック |
+| 単語追加    | 意味候補から選んで単語帳へ登録。登録済みの解除にも対応                                   |
+| 単語帳     | 一覧・検索・編集・削除、「難しい」フラグの切り替え                                     |
+| カード学習   | 学習設定からセッション開始。カードをめくって復習                                      |
+| 意味キャッシュ | 取得済みの意味候補をキャッシュし、同じ語の再取得を高速化                                  |
+
+
+---
+
+
+
+## 技術スタック
+
+
+| 区分      | 技術                                                                                                                                                                                                                                                                                                                           |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| フロントエンド | ![BLADE](https://img.shields.io/badge/BLADE-2F2F2F?style=for-the-badge&logo=laravel&logoColor=FF2D20) ![VITE](https://img.shields.io/badge/VITE-2F2F2F?style=for-the-badge&logo=vite&logoColor=646CFF) ![TAILWINDCSS](https://img.shields.io/badge/TAILWINDCSS-2F2F2F?style=for-the-badge&logo=tailwindcss&logoColor=38BDF8) |
+| バックエンド  | ![LARAVEL](https://img.shields.io/badge/LARAVEL-2F2F2F?style=for-the-badge&logo=laravel&logoColor=FF2D20) ![PHP](https://img.shields.io/badge/PHP-2F2F2F?style=for-the-badge&logo=php&logoColor=777BB4)                                                                                                                      |
+| データベース  | ![SQLITE](https://img.shields.io/badge/SQLITE-2F2F2F?style=for-the-badge&logo=sqlite&logoColor=003B57)                                                                                                                                                                                                                       |
+| 辞書・翻訳   | ![WIKTIONARY](https://img.shields.io/badge/WIKTIONARY-2F2F2F?style=for-the-badge&logo=wikipedia&logoColor=white) ![DEEPL](https://img.shields.io/badge/DEEPL-2F2F2F?style=for-the-badge&logoColor=white)                                                                                                                     |
+| 開発ツール   | ![GIT](https://img.shields.io/badge/GIT-2F2F2F?style=for-the-badge&logo=git&logoColor=F05032) ![GITHUB](https://img.shields.io/badge/GITHUB-2F2F2F?style=for-the-badge&logo=github&logoColor=white)                                                                                                                          |
+
+
+---
+
+
+
+## アプリの画面
+
+
+| ホーム                                | 辞書検索・追加                                  |
+| ---------------------------------- | ---------------------------------------- |
+| ![ホーム](docs/screenshots/home.png)  | ![辞書検索](docs/screenshots/dictionary.png) |
+| 単語帳                                | カード学習                                    |
+| ![単語帳](docs/screenshots/words.png) | ![カード学習](docs/screenshots/study.png)     |
+
+
+---
+
+
+
+## ローカル起動
+
+
+
+### 前提
+
+- PHP 8.3+ / Composer
+- Node.js / npm
+- （任意）DeepL API キー — Wiktionary で訳が取れない語のフォールバック用
+
+
+
+### 手順
 
 ```bash
-composer require laravel/boost --dev
+git clone https://github.com/jin-takahashi09/fliply.git
+cd fliply
 
-php artisan boost:install
+composer install
+cp .env.example .env
+php artisan key:generate
+
+# （任意）DeepL を使う場合
+# DEEPL_API_KEY=your_key_here を .env に記入
+
+php artisan migrate
+php artisan dictionary:import
+
+npm install
+npm run build
+
+composer serve
+# または
+php artisan serve --port=8001
+# http://127.0.0.1:8001
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
 
-## Contributing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 環境変数のポイント
 
-## Code of Conduct
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+| ファイル   | 主な項目                                                                                        |
+| ------ | ------------------------------------------------------------------------------------------- |
+| `.env` | `APP_KEY` / `APP_URL=http://localhost:8001` / `DEEPL_API_KEY`（任意） / `WIKTIONARY_USER_AGENT` |
 
-## Security Vulnerabilities
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+`DEEPL_API_KEY` 未設定でも、Wiktionary で意味が取れる語は利用できます。
 
-## License
+---
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+
+## 今後の展望
+
+- カメラで英単語を読み取り、そのまま単語帳へ追加する機能
+- 他ユーザーの単語帳を閲覧し、気に入った単語を自分の単語帳へ追加できる機能
+- 英単語の発音や例文を確認できる機能
+- 学習した単語数や正答率などを確認できる学習記録機能
+
+などが今後の展望です！！！！！！！！！！！！１
+
