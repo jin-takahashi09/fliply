@@ -96,7 +96,7 @@ it('uses the same cache key for Canvas canvas and CANVAS', function () {
 
     Http::assertSentCount(2);
     expect(DictionaryMeaningsService::cacheKeyFor('Canvas'))
-        ->toBe('dictionary:meanings:v1:canvas');
+        ->toBe('dictionary:meanings:v2:canvas');
 });
 
 it('caches DeepL fallback results and skips both APIs on second request', function () {
@@ -209,6 +209,7 @@ it('uses WiktionaryClient mock only once across repeated canvas lookups', functi
                         'source_order' => 0,
                         'labels' => [],
                         'is_derived' => false,
+                        'is_special' => false,
                     ],
                     [
                         'topic' => 'piece of canvas cloth on which one may paint',
@@ -218,6 +219,7 @@ it('uses WiktionaryClient mock only once across repeated canvas lookups', functi
                         'source_order' => 1,
                         'labels' => [],
                         'is_derived' => false,
+                        'is_special' => false,
                     ],
                 ],
                 'ok' => true,
@@ -267,4 +269,25 @@ it('caches meanings for seven days', function () {
             Mockery::type('array'),
             DictionaryMeaningsService::CACHE_TTL_SECONDS
         );
+});
+
+it('uses cache version v2 and ignores stale v1 cache entries', function () {
+    fakeCanvasWiktionary();
+
+    Cache::put('dictionary:meanings:v1:canvas', [
+        'english' => 'canvas',
+        'candidates' => [
+            ['topic' => 'stale', 'japanese' => '古いキャッシュ'],
+        ],
+        'message' => null,
+    ], 3600);
+
+    $response = $this->getJson('/dictionary/meanings?word=canvas')->assertSuccessful();
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->not->toContain('古いキャッシュ')
+        ->and(DictionaryMeaningsService::cacheKeyFor('canvas'))
+        ->toBe('dictionary:meanings:v2:canvas');
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'en.wiktionary.org'));
 });

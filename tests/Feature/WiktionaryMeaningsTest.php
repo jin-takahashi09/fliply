@@ -109,6 +109,77 @@ function appleWikitext(): string
 WIKITEXT;
 }
 
+function appleWithSlangWikitext(): string
+{
+    return <<<'WIKITEXT'
+==English==
+===Noun===
+====Translations====
+{{trans-top|fruit of ''Malus domestica''}}
+* Japanese: {{t+|ja|林檎|tr=ringo}}, {{t+|ja|リンゴ|tr=ringo}}
+{{trans-bottom}}
+{{trans-top|slang: ball used in basketball}}
+{{qualifier|slang}}
+* Japanese: {{t+|ja|バスケットボール|tr=basukettobōru}}
+{{trans-bottom}}
+WIKITEXT;
+}
+
+function generalWithLabelWikitext(string $label, string $specialJapanese, string $normalJapanese = '通常'): string
+{
+    return <<<WIKITEXT
+==English==
+===Noun===
+====Translations====
+{{trans-top|primary sense}}
+* Japanese: {{t+|ja|{$normalJapanese}|tr=tsūjō}}
+{{trans-bottom}}
+{{trans-top|secondary sense}}
+{{qualifier|{$label}}}
+* Japanese: {{t+|ja|{$specialJapanese}|tr=tokushu}}
+{{trans-bottom}}
+WIKITEXT;
+}
+
+function slangOnlyWikitext(): string
+{
+    return <<<'WIKITEXT'
+==English==
+===Noun===
+====Translations====
+{{trans-top|slang term}}
+{{qualifier|slang}}
+* Japanese: {{t+|ja|俗語訳|tr=zokugoyaku}}
+{{trans-bottom}}
+WIKITEXT;
+}
+
+function archaicOnlyWikitext(): string
+{
+    return <<<'WIKITEXT'
+==English==
+===Noun===
+====Translations====
+{{trans-top|archaic sense}}
+{{qualifier|archaic}}
+* Japanese: {{t+|ja|古語|tr=kogo}}
+{{trans-bottom}}
+WIKITEXT;
+}
+
+function obsoleteOnlyWikitext(): string
+{
+    return <<<'WIKITEXT'
+==English==
+===Noun===
+====Translations====
+{{trans-top|obsolete sense}}
+{{qualifier|obsolete}}
+* Japanese: {{t+|ja|廃語|tr=haigo}}
+{{trans-bottom}}
+WIKITEXT;
+}
+
 function canvasWikitext(): string
 {
     return <<<'WIKITEXT'
@@ -268,6 +339,18 @@ it('does not show checkbox UI in the dictionary page html', function () {
     $response = $this->get('/dictionary');
     $response->assertSuccessful();
     $response->assertDontSee('checkbox');
+});
+
+it('shows idle and empty suggestion states on the dictionary page', function () {
+    $response = $this->get('/dictionary');
+
+    $response->assertSuccessful()
+        ->assertSee('英単語を検索してみよう')
+        ->assertSee('入力すると候補がここに表示されます')
+        ->assertSee('候補が見つかりませんでした')
+        ->assertSee('別の英単語で検索してみてください')
+        ->assertSee('data-suggestions-idle', false)
+        ->assertSee('data-suggestions-empty', false);
 });
 
 it('does not render a standalone english-only heading in dictionary detail', function () {
@@ -658,9 +741,161 @@ it('apple returns a single meaning-group candidate (no meaning-selection UI)', f
     $response->assertJsonCount(1, 'candidates');
 });
 
+it('excludes slang basketball meaning from apple when a normal meaning exists', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(appleWithSlangWikitext(), 'apple'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=apple');
+    $response->assertSuccessful();
+
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toHaveCount(1)
+        ->and($japaneseValues)->toContain('林檎、リンゴ')
+        ->and($japaneseValues)->not->toContain('バスケットボール');
+});
+
+it('does not hardcode apple-specific special-meaning filtering', function () {
+    $serviceSource = file_get_contents(app_path('Services/DictionaryMeaningsService.php'));
+    $clientSource = file_get_contents(app_path('Services/WiktionaryClient.php'));
+
+    expect($serviceSource)->not->toMatch("/['\"]apple['\"]/")
+        ->and($clientSource)->not->toMatch("/['\"]apple['\"]/");
+});
+
+it('keeps only general meanings when slang coexists', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(generalWithLabelWikitext('slang', '俗語'), 'word'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=word');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toBe(['通常'])
+        ->and($japaneseValues)->not->toContain('俗語');
+});
+
+it('keeps only general meanings when informal coexists', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(generalWithLabelWikitext('informal', 'くだけた'), 'word'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=word');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toBe(['通常'])
+        ->and($japaneseValues)->not->toContain('くだけた');
+});
+
+it('keeps only general meanings when figurative coexists', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(generalWithLabelWikitext('figurative', '比喩'), 'word'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=word');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toBe(['通常'])
+        ->and($japaneseValues)->not->toContain('比喩');
+});
+
+it('keeps only general meanings when by extension coexists', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(<<<'WIKITEXT'
+==English==
+===Noun===
+====Translations====
+{{trans-top|primary sense}}
+* Japanese: {{t+|ja|通常|tr=tsūjō}}
+{{trans-bottom}}
+{{trans-top|extended sense}}
+{{qualifier|by extension}}
+* Japanese: {{t+|ja|拡張|tr=kakuchō}}
+{{trans-bottom}}
+WIKITEXT, 'word'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=word');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toBe(['通常'])
+        ->and($japaneseValues)->not->toContain('拡張');
+});
+
+it('keeps special meanings when no normal meaning exists', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(slangOnlyWikitext(), 'slangword'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=slangword');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toBe(['俗語訳']);
+});
+
+it('does not completely drop archaic-labelled senses when they are the only meaning', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(archaicOnlyWikitext(), 'archaicword'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=archaicword');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toBe(['古語']);
+});
+
+it('does not completely drop obsolete-labelled senses when they are the only meaning', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(obsoleteOnlyWikitext(), 'obsoleteword'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=obsoleteword');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toBe(['廃語']);
+});
+
+it('does not call DeepL when only special Wiktionary meanings exist', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(slangOnlyWikitext(), 'slangword'), 200),
+        'api-free.deepl.com/*' => Http::response(wiktDeeplResponse('SHOULD_NOT_BE_USED'), 200),
+    ]);
+
+    $this->getJson('/dictionary/meanings?word=slangword');
+
+    Http::assertNotSent(fn ($r) => str_contains($r->url(), 'deepl.com'));
+});
+
 // ---------------------------------------------------------------------------
 // 14-16. API error handling fallback strategy
 // ---------------------------------------------------------------------------
+
+it('does not mark a normal sense special because another language entry has an informal qualifier', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(<<<'WIKITEXT'
+==English==
+===Verb===
+====Translations====
+{{trans-top|to be able to}}
+* Japanese: {{t+|ja|できる|tr=dekiru}}
+{{trans-bottom}}
+===Noun===
+====Translations====
+{{trans-top|a tin-plate canister}}
+* Slovene: {{t|sl|pločevinka|f}}, {{qualifier|informal}} {{t|sl|konzerva|f}}
+* Japanese: {{t+|ja|缶|tr=kan}}
+{{trans-bottom}}
+WIKITEXT, 'can'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=can');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toHaveCount(2)
+        ->and($japaneseValues)->toContain('できる')
+        ->and($japaneseValues)->toContain('缶');
+});
 
 it('does not call DeepL when Wiktionary has candidates', function () {
     Http::fake([

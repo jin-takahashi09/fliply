@@ -29,62 +29,77 @@
                 'japanese' => $word->japanese,
                 'isHard' => $word->is_hard,
             ])->values();
+            $firstWord = $words->first();
+            $firstQuestion = $direction === 'en-ja'
+                ? $firstWord->english
+                : $firstWord->japanese;
         @endphp
 
-        <section class="study-session" data-study data-direction="{{ $direction }}">
+        <section
+            class="study-session"
+            data-study
+            data-direction="{{ $direction }}"
+            data-first-question="{{ $firstQuestion }}"
+        >
             <div class="progress-track" aria-hidden="true">
                 <span data-progress-bar data-progress-width="{{ 100 / $words->count() }}"></span>
             </div>
 
             <div class="study-context">
                 <span data-card-number>CARD 01</span>
-                <p>{{ $direction === 'en-ja' ? '英単語の意味を思い出そう' : '日本語に合う英単語を思い出そう' }}</p>
             </div>
 
-            <div class="study-book-wrap" data-card-wrap>
-                <div class="study-book" data-card role="button" tabindex="0" aria-label="カードをめくって答えを見る">
-                    <article class="study-card study-card__answer">
-                        <span class="study-card__label">ANSWER</span>
-                        <strong data-answer-text>{{ $direction === 'en-ja' ? $words->first()->japanese : $words->first()->english }}</strong>
-                        <small>答え</small>
-                    </article>
+            <div class="study-stack" data-study-stack>
+                <div class="study-stack__layer study-stack__layer--3" data-stack-layer hidden aria-hidden="true">
+                    <span class="study-stack__text" data-stack-text></span>
+                </div>
+                <div class="study-stack__layer study-stack__layer--2" data-stack-layer hidden aria-hidden="true">
+                    <span class="study-stack__text" data-stack-text></span>
+                </div>
+                <div class="study-stack__layer study-stack__layer--1" data-stack-layer hidden aria-hidden="true">
+                    <span class="study-stack__text" data-stack-text></span>
+                </div>
 
-                    <article class="study-card study-card__question">
-                        <span class="study-card__label">QUESTION</span>
-                        <strong data-question-text>{{ $direction === 'en-ja' ? $words->first()->english : $words->first()->japanese }}</strong>
-                        <span class="turn-hint"><span class="turn-hint__gesture">↗</span> タップしてめくる</span>
-                    </article>
+                <div class="study-book-wrap" data-card-wrap>
+                    <div class="study-deck" data-study-deck aria-live="polite"></div>
                 </div>
             </div>
 
             <div class="study-actions" data-study-actions aria-hidden="true">
-                <button type="button" class="answer-button answer-button--hard" data-answer="hard">
-                    <x-icon name="star" :size="19" />
-                    <span><strong>難しかった</strong><small>今回の記録に追加</small></span>
+                <button type="button" class="answer-button answer-button--incorrect" data-answer="incorrect">
+                    <x-icon name="close" :size="19" />
+                    <span><strong>不正解</strong></span>
                 </button>
-                <button type="button" class="answer-button answer-button--known" data-answer="known">
+                <button type="button" class="answer-button answer-button--correct" data-answer="correct">
                     <x-icon name="check" :size="19" />
-                    <span><strong>わかった</strong><small>次のカードへ</small></span>
+                    <span><strong>正解</strong></span>
                 </button>
             </div>
-
-            <p class="study-tip" data-study-tip>カードの右側をめくるようにタップ</p>
         </section>
 
         <section class="complete-screen" data-complete hidden>
             <div class="complete-mark"><x-icon name="sparkle" :size="32" /></div>
             <p class="eyebrow">SESSION COMPLETE</p>
-            <h1>今日の学習、おつかれさま。</h1>
-            <p>最後までカードをめくりました。少しずつ、使える言葉になっています。</p>
+            <h1>学習完了</h1>
+            <p class="complete-summary" data-complete-summary>{{ $words->count() }}問中 0問正解</p>
 
-            <div class="complete-stats">
-                <div><strong>{{ $words->count() }}</strong><small>学習した単語</small></div>
-                <div><strong data-hard-count>0</strong><small>難しかった</small></div>
+            <div class="complete-stats complete-stats--study">
+                <div><strong data-correct-count>0</strong><small>正解</small></div>
+                <div><strong data-incorrect-count>0</strong><small>不正解</small></div>
             </div>
 
-            <div class="complete-actions">
-                <a href="{{ request()->fullUrl() }}" class="primary-button"><x-icon name="cards" :size="17" /> もう一度</a>
-                <a href="{{ route('home') }}" class="secondary-button">ホームへ戻る</a>
+            <div class="complete-screen__footer">
+                <p class="complete-perfect" data-perfect-message hidden>全問正解！</p>
+
+                <div class="complete-incorrect" data-incorrect-section hidden>
+                    <h2>今回間違えた単語</h2>
+                    <ul class="complete-incorrect__list" data-incorrect-list></ul>
+                </div>
+
+                <div class="complete-actions">
+                    <a href="{{ request()->fullUrl() }}" class="primary-button"><x-icon name="cards" :size="17" /> もう一度</a>
+                    <a href="{{ route('home') }}" class="secondary-button">ホームへ戻る</a>
+                </div>
             </div>
         </section>
 

@@ -273,7 +273,7 @@ class WiktionaryClient
      *   ==={{noun}}===
      *   #[[観点]]。[[視点]]。
      *
-     * @return list<array{topic: string, candidates: list<string>, part_of_speech: string, etymology_id: int, source_order: int, labels: list<string>, is_derived: bool}>
+     * @return list<array{topic: string, candidates: list<string>, part_of_speech: string, etymology_id: int, source_order: int, labels: list<string>, is_derived: bool, is_special: bool}>
      */
     private function extractJaEnglishSectionGroups(string $wikitext): array
     {
@@ -311,6 +311,7 @@ class WiktionaryClient
                 'source_order' => $groupOrder++,
                 'labels' => [],
                 'is_derived' => false,
+                'is_special' => false,
             ];
         }
 
@@ -489,6 +490,7 @@ class WiktionaryClient
                         'source_order'    => $currentBlockOrder,
                         'labels'          => $labels,     // rare/archaic/etc labels found in this group
                         'is_derived'      => $hasDerived, // figurative/by extension/metaphorical
+                        'is_special'      => $this->detectSpecialMeaning($blockText),
                     ];
                 }
 
@@ -517,6 +519,60 @@ class WiktionaryClient
         }
 
         return $groups;
+    }
+
+    /**
+     * Detect slang / informal / figurative / by-extension senses from Wiktionary markup.
+     *
+     * Uses labels, qualifiers, and trans-top topics — never Japanese translation text.
+     * Only inspects sense-level metadata before per-language translation lines so that
+     * qualifiers attached to individual language entries do not mark the whole sense special.
+     */
+    private function detectSpecialMeaning(string $blockText): bool
+    {
+        $text = mb_strtolower($this->extractSenseLevelBlockText($blockText));
+
+        if (preg_match('/\{\{qualifier\|(slang|informal|figurative|figuratively)\}\}/', $text)) {
+            return true;
+        }
+
+        if (preg_match('/\{\{lb\|[^}|]*\|(slang|informal|figurative|figuratively)\b/', $text)) {
+            return true;
+        }
+
+        if (preg_match('/\{\{sense\|[^}]*\b(slang|informal|figurative|figuratively)\b/', $text)) {
+            return true;
+        }
+
+        if (preg_match('/\{\{trans-top\|[^}]*\b(slang|informal|figurative)\b/', $text)) {
+            return true;
+        }
+
+        if (str_contains($text, 'by extension')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Return only the sense-level portion of a translation block (before language lines).
+     */
+    private function extractSenseLevelBlockText(string $blockText): string
+    {
+        $senseLines = [];
+
+        foreach (explode("\n", $blockText) as $line) {
+            $trimmed = ltrim($line);
+
+            if ($trimmed !== '' && str_starts_with($trimmed, '*')) {
+                break;
+            }
+
+            $senseLines[] = $line;
+        }
+
+        return implode("\n", $senseLines);
     }
 
     /**

@@ -12,14 +12,14 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="{{ request()->routeIs('home') ? 'page-home' : '' }}"></body>
+<body class="{{ request()->routeIs('home') ? 'page-home' : '' }}">
 <div class="app-shell {{ ($hideNav ?? false) ? 'app-shell--focus' : '' }}">
     @if ($compactHeader ?? false)
     <header class="focus-header">
         @yield('compact-header')
     </header>
     @else
-    <header class="app-header">
+    <header class="app-header app-header--mobile">
         <a href="{{ route('home') }}" class="brand" aria-label="Fliply ホーム">
             <span class="brand__mark">
                 <x-icon
@@ -48,7 +48,7 @@
     </main>
 
     @unless ($hideNav ?? false)
-    <x-bottom-nav />
+    <x-bottom-nav class="bottom-nav--mobile" />
     @endunless
 </div>
 </body>
