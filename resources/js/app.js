@@ -56,6 +56,28 @@ const wordsPageRoot = document.querySelector('[data-words-filter]');
 const wordsListFilter = wordsPageRoot?.dataset.wordsFilter ?? '';
 const wordsCountEl = document.querySelector('[data-words-count]');
 
+/*
+|--------------------------------------------------------------------------
+| Navigation tracking (sessionStorage)
+| Used so /words selection mode is cleared when returning from other pages,
+| while keeping selection across /words search & filter navigations.
+|--------------------------------------------------------------------------
+*/
+const LAST_PATHNAME_KEY = 'fliply:lastPathname';
+const previousPathname = sessionStorage.getItem(LAST_PATHNAME_KEY);
+
+function isWordsIndexPath(pathname) {
+    return pathname === '/words' || pathname === '/words/';
+}
+
+function rememberCurrentPathname() {
+    try {
+        sessionStorage.setItem(LAST_PATHNAME_KEY, window.location.pathname);
+    } catch {
+        // Ignore quota / private-mode failures.
+    }
+}
+
 function decrementWordsCount() {
     if (!wordsCountEl) {
         return;
@@ -516,13 +538,38 @@ if (wordsPageRoot) {
         });
     }
 
-    restoreSelectionState();
+    // Keep selection only while staying within /words (search / filter / reload).
+    // Coming from home / study / dictionary / etc. fully exits selection mode.
+    if (isWordsIndexPath(previousPathname)) {
+        restoreSelectionState();
+    } else {
+        clearPersistedSelectionState();
+    }
+
     applySelectionToRows();
 
     if (wordSearchInput && getWordRows().length > 0) {
         filterWordRowsByKeyword(wordSearchInput.value.trim().toLowerCase());
     }
+
+    // bfcache: browser back may restore the selection-mode DOM as-is.
+    window.addEventListener('pageshow', (event) => {
+        if (
+            event.persisted &&
+            !isWordsIndexPath(sessionStorage.getItem(LAST_PATHNAME_KEY))
+        ) {
+            exitSelectionMode(true);
+        }
+
+        rememberCurrentPathname();
+    });
 }
+
+rememberCurrentPathname();
+
+window.addEventListener('pageshow', () => {
+    rememberCurrentPathname();
+});
 
 /*
 |--------------------------------------------------------------------------
