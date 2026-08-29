@@ -3555,7 +3555,7 @@ body.page-home .app-main {
 
     body.page-home .home-hero__copy,
     .page-home .home-hero__copy {
-        top: clamp(12%, 3dvh, 18%);
+        top: 24%;
         width: 52%;
     }
 
