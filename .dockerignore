@@ -1,0 +1,65 @@
+# Git / IDE
+.git
+.github
+.gitattributes
+.gitignore
+.cursor
+.codex
+.idea
+.vscode
+.zed
+.nova
+*.md
+docs
+tmp-screenshots
+agent-transcripts
+
+# Secrets — never bake into the image
+.env
+.env.*
+!.env.example
+auth.json
+
+# Dependencies (installed inside the image)
+/node_modules
+/vendor
+
+# Frontend build output (produced in the frontend stage)
+/public/build
+/public/hot
+/public/storage
+/public/fonts-manifest.dev.json
+
+# Local / OS junk
+.DS_Store
+Thumbs.db
+*.log
+.phpunit.result.cache
+.phpunit.cache
+.phpactor.json
+_ide_helper.php
+Homestead.json
+Homestead.yaml
+
+# Runtime caches & logs (recreated in the container)
+/storage/logs/*
+!/storage/logs/.gitignore
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/pail
+/storage/*.key
+/bootstrap/cache/*.php
+
+# Local SQLite DB (schema + dictionary seed are created during image build)
+/database/*.sqlite
+/database/*.sqlite-*
+
+# Tests (not needed at runtime)
+/tests
+/phpunit.xml
