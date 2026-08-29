@@ -3,19 +3,13 @@
 @section('title', '単語を追加 - Fliply')
 
 @section('content')
-<div class="page-back reveal">
-    <a href="{{ route('words.index') }}">
-        <x-icon name="arrow-left" :size="17" />
-        単語帳へ戻る
-    </a>
-</div>
-
-<section class="form-heading reveal reveal--delay-1">
+<section class="form-heading reveal">
+    <p class="eyebrow">SEARCH WORDS</p>
     <h1>新しい言葉を探す。</h1>
 </section>
 
 <section
-    class="form-card dictionary-card reveal reveal--delay-2"
+    class="form-card dictionary-card reveal reveal--delay-1"
     data-dictionary
     data-suggestions-url="{{ route('dictionary.suggestions') }}"
     data-meanings-url="{{ route('dictionary.meanings') }}"

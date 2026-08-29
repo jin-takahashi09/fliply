@@ -13,9 +13,9 @@ class HomeController extends Controller
         $hardWords = Word::where('is_hard', true)->count();
         $featuredWord = Word::latest()->first();
 
-        // 最新の単語を3件取得
+        // 最新の単語を最大6件取得（スマホはCSSで3件表示）
         $recentWords = Word::latest()
-            ->take(3)
+            ->take(6)
             ->get();
 
         return view('home', compact(

@@ -6,6 +6,7 @@ use App\Models\Word;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 
@@ -20,7 +21,7 @@ class WordController extends Controller
             ->when($q !== '', fn ($query) => $query->where('english', 'like', '%'.$q.'%'))
             ->when($filter === 'hard', fn ($query) => $query->where('is_hard', true))
             ->when($filter === 'normal', fn ($query) => $query->where('is_hard', false))
-            ->orderBy('id')
+            ->orderByDesc('id')
             ->get();
 
         return view('words.index', compact('words', 'filter', 'q'));
@@ -48,6 +49,38 @@ class WordController extends Controller
         $word->delete();
 
         return redirect()->route('words.index');
+    }
+
+    public function destroyMany(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+
+        /** @var list<int> $ids */
+        $ids = $validated['ids'];
+
+        $words = Word::query()
+            ->whereIn('id', $ids)
+            ->get();
+
+        if ($words->count() !== count($ids)) {
+            return response()->json([
+                'message' => '削除対象の単語が見つかりません。',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($words): void {
+            foreach ($words as $word) {
+                $word->delete();
+            }
+        });
+
+        return response()->json([
+            'deleted_ids' => $words->pluck('id')->values()->all(),
+            'deleted_count' => $words->count(),
+        ]);
     }
 
     public function toggleHard(Request $request, Word $word): RedirectResponse|JsonResponse

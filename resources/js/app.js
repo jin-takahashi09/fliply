@@ -34,28 +34,6 @@ document.addEventListener('keydown', (event) => {
 |--------------------------------------------------------------------------
 */
 const wordSearchInput = document.querySelector('[data-search-input]');
-const wordRows = document.querySelectorAll('.word-row');
-if (wordSearchInput && wordRows.length > 0) {
-    wordSearchInput.addEventListener('input', () => {
-        const keyword = wordSearchInput.value
-            .trim()
-            .toLowerCase();
-        wordRows.forEach((row) => {
-            const english = row
-                .querySelector('.word-copy h2')
-                ?.textContent
-                .toLowerCase() || '';
-            const japanese = row
-                .querySelector('.word-copy p')
-                ?.textContent
-                .toLowerCase() || '';
-            const matches =
-                english.startsWith(keyword) ||
-                japanese.startsWith(keyword);
-            row.style.display = matches ? '' : 'none';
-        });
-    });
-}
 /*
 |--------------------------------------------------------------------------
 | Toast
@@ -164,6 +142,390 @@ document.querySelectorAll('[data-toggle-hard-form]').forEach((form) => {
 
 /*
 |--------------------------------------------------------------------------
+| Words page — selection mode & bulk delete
+|--------------------------------------------------------------------------
+*/
+if (wordsPageRoot) {
+    const bulkDestroyUrl = wordsPageRoot.dataset.wordsBulkDestroyUrl ?? '';
+    const csrfToken =
+        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ??
+        '';
+    const selectToggle = wordsPageRoot.querySelector('[data-words-select-toggle]');
+    const filterDefault = wordsPageRoot.querySelector('[data-words-filter-default]');
+    const selectionBar = wordsPageRoot.querySelector('[data-words-selection-bar]');
+    const selectionCountEl = wordsPageRoot.querySelector(
+        '[data-words-selection-count]',
+    );
+    const selectAllButton = wordsPageRoot.querySelector('[data-words-select-all]');
+    const cancelButton = wordsPageRoot.querySelector('[data-words-cancel]');
+    const bulkDeleteButton = wordsPageRoot.querySelector('[data-words-bulk-delete]');
+    const wordsScroll = wordsPageRoot.querySelector('[data-words-scroll]');
+    const searchForm = wordsPageRoot.querySelector('.search-form');
+    const serverQuery = wordsPageRoot.dataset.wordsQ ?? '';
+    const serverFilter = wordsPageRoot.dataset.wordsFilter ?? '';
+
+    const SELECTION_IDS_KEY = 'fliply:words:selectedIds';
+    const SELECTION_MODE_KEY = 'fliply:words:selectionMode';
+
+    const selectedIds = new Set();
+    let isSelectionMode = false;
+
+    function getWordRows() {
+        return Array.from(wordsPageRoot.querySelectorAll('.word-row'));
+    }
+
+    function getVisibleWordRows() {
+        return getWordRows().filter((row) => row.style.display !== 'none');
+    }
+
+    function persistSelectionState() {
+        sessionStorage.setItem(
+            SELECTION_IDS_KEY,
+            JSON.stringify([...selectedIds]),
+        );
+        sessionStorage.setItem(
+            SELECTION_MODE_KEY,
+            isSelectionMode ? '1' : '0',
+        );
+    }
+
+    function clearPersistedSelectionState() {
+        sessionStorage.removeItem(SELECTION_IDS_KEY);
+        sessionStorage.removeItem(SELECTION_MODE_KEY);
+    }
+
+    function restoreSelectionState() {
+        try {
+            const storedIds = sessionStorage.getItem(SELECTION_IDS_KEY);
+
+            if (storedIds) {
+                JSON.parse(storedIds).forEach((id) => {
+                    selectedIds.add(String(id));
+                });
+            }
+        } catch {
+            selectedIds.clear();
+        }
+
+        if (sessionStorage.getItem(SELECTION_MODE_KEY) === '1') {
+            isSelectionMode = true;
+            wordsPageRoot.classList.add('is-selection-mode');
+
+            if (filterDefault) {
+                filterDefault.hidden = true;
+            }
+
+            if (selectionBar) {
+                selectionBar.hidden = false;
+            }
+        }
+    }
+
+    function applySelectionToRows() {
+        getWordRows().forEach((row) => {
+            const wordId = row.dataset.wordId;
+            const isSelected = Boolean(wordId && selectedIds.has(wordId));
+
+            row.classList.toggle('is-selected', isSelected);
+            row.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        });
+
+        updateSelectionUi();
+    }
+
+    function filterWordRowsByKeyword(keyword) {
+        getWordRows().forEach((row) => {
+            const english =
+                row.querySelector('.word-copy h2')?.textContent.toLowerCase() ||
+                '';
+            const japanese =
+                row.querySelector('.word-copy p')?.textContent.toLowerCase() ||
+                '';
+            const matches =
+                keyword === '' ||
+                english.startsWith(keyword) ||
+                japanese.startsWith(keyword);
+
+            row.style.display = matches ? '' : 'none';
+        });
+
+        applySelectionToRows();
+    }
+
+    function decrementWordsCountBy(amount) {
+        if (!wordsCountEl || amount <= 0) {
+            return;
+        }
+
+        const current = Number.parseInt(wordsCountEl.textContent || '0', 10);
+        wordsCountEl.textContent = String(Math.max(0, current - amount));
+    }
+
+    function updateSelectionUi() {
+        const count = selectedIds.size;
+
+        if (selectionCountEl) {
+            selectionCountEl.textContent = `${count}件選択中`;
+        }
+
+        if (bulkDeleteButton) {
+            bulkDeleteButton.disabled = count === 0;
+            bulkDeleteButton.textContent =
+                count > 0 ? `${count}件を削除` : '削除';
+        }
+
+        if (selectAllButton) {
+            const visibleRows = getVisibleWordRows();
+            const visibleIds = visibleRows
+                .map((row) => row.dataset.wordId)
+                .filter(Boolean);
+            const allVisibleSelected =
+                visibleIds.length > 0 &&
+                visibleIds.every((id) => selectedIds.has(id));
+
+            selectAllButton.textContent = allVisibleSelected
+                ? '選択解除'
+                : 'すべて選択';
+        }
+    }
+
+    function clearAllSelection() {
+        selectedIds.clear();
+        applySelectionToRows();
+        persistSelectionState();
+    }
+
+    function enterSelectionMode() {
+        isSelectionMode = true;
+        wordsPageRoot.classList.add('is-selection-mode');
+
+        if (filterDefault) {
+            filterDefault.hidden = true;
+        }
+
+        if (selectionBar) {
+            selectionBar.hidden = false;
+        }
+
+        applySelectionToRows();
+        persistSelectionState();
+    }
+
+    function exitSelectionMode(clearSelection = true) {
+        isSelectionMode = false;
+        wordsPageRoot.classList.remove('is-selection-mode');
+
+        if (filterDefault) {
+            filterDefault.hidden = false;
+        }
+
+        if (selectionBar) {
+            selectionBar.hidden = true;
+        }
+
+        if (clearSelection) {
+            selectedIds.clear();
+            applySelectionToRows();
+            clearPersistedSelectionState();
+            return;
+        }
+
+        updateSelectionUi();
+        persistSelectionState();
+    }
+
+    function toggleRowSelection(row) {
+        const wordId = row.dataset.wordId;
+
+        if (!wordId) {
+            return;
+        }
+
+        if (selectedIds.has(wordId)) {
+            selectedIds.delete(wordId);
+        } else {
+            selectedIds.add(wordId);
+        }
+
+        applySelectionToRows();
+        persistSelectionState();
+    }
+
+    function hasActiveFilterOrSearch() {
+        const keyword = wordSearchInput?.value.trim() ?? '';
+
+        return (
+            serverQuery !== '' ||
+            serverFilter === 'hard' ||
+            serverFilter === 'normal' ||
+            keyword !== ''
+        );
+    }
+
+    function renderEmptyState() {
+        if (!wordsScroll) {
+            return;
+        }
+
+        const filtered = hasActiveFilterOrSearch();
+
+        wordsScroll.innerHTML = `
+            <section class="empty-state" data-words-empty>
+                <span class="empty-state__icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4v15.5"/><path d="M20 4H8a2 2 0 0 0-2 2v11"/></svg></span>
+                <h2>${filtered ? '該当する単語がありません' : '単語はまだ登録されていません。'}</h2>
+                <p>${filtered ? '検索条件を変えて、もう一度試してみてください。' : '覚えたい単語を追加すると、ここに並びます。'}</p>
+            </section>
+        `;
+    }
+
+    selectToggle?.addEventListener('click', () => {
+        enterSelectionMode();
+    });
+
+    cancelButton?.addEventListener('click', () => {
+        exitSelectionMode(true);
+    });
+
+    selectAllButton?.addEventListener('click', () => {
+        const visibleRows = getVisibleWordRows();
+        const visibleIds = visibleRows
+            .map((row) => row.dataset.wordId)
+            .filter(Boolean);
+        const allVisibleSelected =
+            visibleIds.length > 0 &&
+            visibleIds.every((id) => selectedIds.has(id));
+
+        if (allVisibleSelected) {
+            clearAllSelection();
+            return;
+        }
+
+        visibleRows.forEach((row) => {
+            const wordId = row.dataset.wordId;
+
+            if (!wordId) {
+                return;
+            }
+
+            selectedIds.add(wordId);
+        });
+
+        applySelectionToRows();
+        persistSelectionState();
+    });
+
+    wordsPageRoot.addEventListener('click', (event) => {
+        if (!isSelectionMode) {
+            return;
+        }
+
+        const row = event.target.closest('.word-row');
+
+        if (!row || row.style.display === 'none') {
+            return;
+        }
+
+        if (event.target.closest('.word-actions')) {
+            return;
+        }
+
+        event.preventDefault();
+        toggleRowSelection(row);
+    });
+
+    bulkDeleteButton?.addEventListener('click', () => {
+        const ids = Array.from(selectedIds);
+
+        if (ids.length === 0 || !bulkDestroyUrl) {
+            return;
+        }
+
+        const message = `選択した${ids.length}件を削除しますか？`;
+
+        if (!window.confirm(message)) {
+            return;
+        }
+
+        bulkDeleteButton.disabled = true;
+
+        fetch(bulkDestroyUrl, {
+            method: 'DELETE',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify({ ids: ids.map((id) => Number.parseInt(id, 10)) }),
+        })
+            .then(async (response) => {
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'delete failed');
+                }
+
+                return data;
+            })
+            .then((data) => {
+                const deletedIds = (data.deleted_ids ?? []).map(String);
+
+                deletedIds.forEach((id) => {
+                    const row = wordsPageRoot.querySelector(
+                        `.word-row[data-word-id="${id}"]`,
+                    );
+                    removeWordRow(row);
+                });
+
+                decrementWordsCountBy(
+                    data.deleted_count ?? deletedIds.length,
+                );
+
+                deletedIds.forEach((id) => selectedIds.delete(id));
+                exitSelectionMode(true);
+
+                const remainingRows = getWordRows();
+
+                if (remainingRows.length === 0) {
+                    renderEmptyState();
+                }
+            })
+            .catch(() => {
+                window.alert('削除に失敗しました');
+                updateSelectionUi();
+            })
+            .finally(() => {
+                updateSelectionUi();
+            });
+    });
+
+    wordsPageRoot.querySelectorAll('.filter-row a').forEach((link) => {
+        link.addEventListener('click', () => {
+            persistSelectionState();
+        });
+    });
+
+    searchForm?.addEventListener('submit', () => {
+        persistSelectionState();
+    });
+
+    if (wordSearchInput) {
+        wordSearchInput.addEventListener('input', () => {
+            filterWordRowsByKeyword(
+                wordSearchInput.value.trim().toLowerCase(),
+            );
+        });
+    }
+
+    restoreSelectionState();
+    applySelectionToRows();
+
+    if (wordSearchInput && getWordRows().length > 0) {
+        filterWordRowsByKeyword(wordSearchInput.value.trim().toLowerCase());
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Study session — stacked page deck
 |--------------------------------------------------------------------------
 */
@@ -173,7 +535,6 @@ if (studyRoot) {
     const words = JSON.parse(dataElement?.textContent || '[]');
     const direction = studyRoot.dataset.direction || 'en-ja';
     const deck = studyRoot.querySelector('[data-study-deck]');
-    const studyStack = studyRoot.querySelector('[data-study-stack]');
     const stackLayers = studyRoot.querySelectorAll('[data-stack-layer]');
     const cardNumber = studyRoot.querySelector('[data-card-number]');
     const actions = studyRoot.querySelector('[data-study-actions]');
@@ -323,20 +684,29 @@ if (studyRoot) {
 
     const renderStackPreview = () => {
         const index = currentWordIndex();
+        const remainingIncludingCurrent = words.length - index;
+        // Keep a stable "front + 2 behind" look until the endgame.
+        const visibleBehind = Math.min(
+            2,
+            Math.max(0, remainingIncludingCurrent - 1),
+        );
 
         stackLayers.forEach((layer, offset) => {
-            const word = words[index + 1 + offset];
             const textElement = layer.querySelector('[data-stack-text]');
 
-            if (!word || !textElement) {
+            if (offset >= visibleBehind || !textElement) {
                 layer.hidden = true;
                 layer.setAttribute('aria-hidden', 'true');
+                if (textElement) {
+                    textElement.textContent = '';
+                }
                 return;
             }
 
+            const word = words[index + 1 + offset];
             layer.hidden = false;
             layer.setAttribute('aria-hidden', 'true');
-            textElement.textContent = questionFor(word);
+            textElement.textContent = word ? questionFor(word) : '';
         });
     };
 
@@ -449,14 +819,12 @@ if (studyRoot) {
             scheduleAnswerActionsReveal();
         }
 
-        studyStack?.classList.add('is-advancing-stack');
         top.classList.add('is-turning');
 
         window.setTimeout(() => {
             top.remove();
             pageElements.shift();
             markActivePage();
-            studyStack?.classList.remove('is-advancing-stack');
             hideAnswerActions();
 
             onComplete?.();
