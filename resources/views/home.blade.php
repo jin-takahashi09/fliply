@@ -94,76 +94,130 @@
                 </div>
 
                 <div class="home-word-stack" aria-label="最新の単語">
-                    <div class="home-word-card home-word-card--back" aria-hidden="true"></div>
+                    <div
+                        class="home-word-card home-word-card--back"
+                        aria-hidden="true"
+                    ></div>
 
                     <div class="home-word-card home-word-card--front">
-                        <span class="home-word-card__bookmark" aria-hidden="true"></span>
+                        <span
+                            class="home-word-card__bookmark"
+                            aria-hidden="true"
+                        ></span>
+
                         <small>LATEST WORD</small>
-                        <strong>{{ $featuredWord?->english ?? 'persist' }}</strong>
-                        <span class="home-word-card__divider" aria-hidden="true"></span>
-                        <p>{{ $featuredWord?->japanese ?? '粘り強く続ける' }}</p>
+
+                        <strong>
+                            {{ $featuredWord?->english ?? 'persist' }}
+                        </strong>
+
+                        <span
+                            class="home-word-card__divider"
+                            aria-hidden="true"
+                        ></span>
+
+                        <p>
+                            {{ $featuredWord?->japanese ?? '粘り強く続ける' }}
+                        </p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <section class="home-stats reveal reveal--delay-1" aria-label="単語帳の情報">
+        <section
+            class="home-stats reveal reveal--delay-1"
+            aria-label="単語帳の情報"
+        >
             <a
                 href="{{ route('words.index') }}"
                 class="home-stat-card"
             >
-                <span class="home-stat-card__icon" aria-hidden="true">
+                <span
+                    class="home-stat-card__icon"
+                    aria-hidden="true"
+                >
                     <x-icon name="book" :size="34" />
                 </span>
-                <span class="home-stat-card__label">登録単語</span>
-                <strong>{{ $totalWords }}</strong>
+
+                <span class="home-stat-card__label">
+                    登録単語
+                </span>
+
+                <strong>
+                    {{ $totalWords }}
+                </strong>
             </a>
 
             <a
                 href="{{ route('words.index', ['filter' => 'hard']) }}"
                 class="home-stat-card home-stat-card--hard"
             >
-                <span class="home-stat-card__icon" aria-hidden="true">
+                <span
+                    class="home-stat-card__icon"
+                    aria-hidden="true"
+                >
                     <x-icon name="chart-up" :size="34" />
                 </span>
-                <span class="home-stat-card__label">難しい単語</span>
-                <strong>{{ $hardWords }}</strong>
+
+                <span class="home-stat-card__label">
+                    難しい単語
+                </span>
+
+                <strong>
+                    {{ $hardWords }}
+                </strong>
             </a>
         </section>
 
-        <div class="home-wave" aria-hidden="true">
+        <section class="home-recent reveal reveal--delay-2">
+            <div class="home-recent__head">
+                <div>
+                    <span>RECENT WORDS</span>
+                    <h2>最近追加した単語</h2>
+                </div>
 
-            <svg
-                class="home-wave__layer home-wave__layer--back"
-                viewBox="0 0 1200 220"
-                preserveAspectRatio="none"
-            >
-                <path d="M0 100 C100 60 200 140 300 100 C400 60 500 140 600 100 C700 60 800 140 900 100 C1000 60 1100 140 1200 100 V220 H0 Z" />
-            </svg>
+                <a href="{{ route('words.index') }}">
+                    すべて見る
+                </a>
+            </div>
 
-            <svg
-                class="home-wave__layer home-wave__layer--middle"
-                viewBox="0 0 1200 220"
-                preserveAspectRatio="none"
-            >
-                <path d="M0 140 C100 100 200 180 300 140 C400 100 500 180 600 140 C700 100 800 180 900 140 C1000 100 1100 180 1200 140 V220 H0 Z" />
-            </svg>
+            @if ($recentWords->isNotEmpty())
+                <div class="home-recent__grid">
+                    @foreach ($recentWords as $word)
+                        <a
+                            href="{{ route('words.index') }}"
+                            class="home-recent-card {{ $word->is_hard ? 'is-hard' : '' }}"
+                        >
+                            @if ($word->is_hard)
+                                <span
+                                    class="home-recent-card__star"
+                                    aria-label="難しい単語"
+                                >
+                                    ★
+                                </span>
+                            @endif
 
-            <svg
-                class="home-wave__layer home-wave__layer--front"
-                viewBox="0 0 1200 220"
-                preserveAspectRatio="none"
-            >
-                <path d="M0 170 C100 135 200 205 300 170 C400 135 500 205 600 170 C700 135 800 205 900 170 C1000 135 1100 205 1200 170 V220 H0 Z" />
-            </svg>
+                            <strong>
+                                {{ $word->english }}
+                            </strong>
 
-            <svg
-                class="home-wave__line"
-                viewBox="0 0 1200 220"
-                preserveAspectRatio="none"
-            >
-                <path d="M0 150 C100 110 200 190 300 150 C400 110 500 190 600 150 C700 110 800 190 900 150 C1000 110 1100 190 1200 150" />
-            </svg>
-        </div>
+                            <p>
+                                {{ $word->japanese }}
+                            </p>
+                        </a>
+                    @endforeach
+                </div>
+            @else
+                <div class="home-recent__empty">
+                    <p>
+                        まだ単語が登録されていません。
+                    </p>
+
+                    <a href="{{ route('words.create') }}">
+                        最初の単語を追加
+                    </a>
+                </div>
+            @endif
+        </section>
     </div>
 @endsection
