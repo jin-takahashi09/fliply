@@ -48,28 +48,33 @@ class DictionarySearchController extends Controller
 
         $lower = strtolower($query);
 
-        // lower(word) でグループ化し、小文字版があれば小文字版を優先して代表1語を選ぶ
-        $selectExpr = "CASE
-            WHEN lower(word) = word THEN word
-            WHEN MIN(CASE WHEN lower(word) = word THEN word END) IS NOT NULL
-                 THEN MIN(CASE WHEN lower(word) = word THEN word END)
-            ELSE MIN(word)
-        END";
+        // Prefer the lowercase spelling within each case-insensitive group.
+        // Must use only aggregates / GROUP BY keys so PostgreSQL accepts the query
+        // (SQLite is lenient about bare `word` in SELECT; PostgreSQL is not).
+        $selectExpr = 'COALESCE(MIN(CASE WHEN lower(word) = word THEN word END), MIN(word))';
 
-        $baseWhere = "lower(word) LIKE ? AND length(word) > 1";
+        $baseWhere = 'lower(word) LIKE ? AND length(word) > 1';
         $param = [$lower.'%'];
 
-        $total = \Illuminate\Support\Facades\DB::table('dictionary_words')
-            ->whereRaw($baseWhere, $param)
-            ->groupByRaw('lower(word)')
-            ->selectRaw($selectExpr.' AS chosen_word')
-            ->get()
+        $grouped = static function () use ($baseWhere, $param, $selectExpr) {
+            return DB::table('dictionary_words')
+                ->whereRaw($baseWhere, $param)
+                ->groupByRaw('lower(word)')
+                ->selectRaw($selectExpr.' AS chosen_word');
+        };
+
+        // Count distinct lower(word) groups without hydrating every row into PHP.
+        $total = (int) DB::query()
+            ->fromSub(
+                DB::table('dictionary_words')
+                    ->whereRaw($baseWhere, $param)
+                    ->groupByRaw('lower(word)')
+                    ->selectRaw('1'),
+                'dictionary_suggestion_groups',
+            )
             ->count();
 
-        $words = \Illuminate\Support\Facades\DB::table('dictionary_words')
-            ->whereRaw($baseWhere, $param)
-            ->groupByRaw('lower(word)')
-            ->selectRaw($selectExpr.' AS chosen_word')
+        $words = $grouped()
             ->orderByRaw('lower('.$selectExpr.')')
             ->orderByRaw($selectExpr)
             ->skip($offset)

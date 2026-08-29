@@ -422,6 +422,39 @@ it('returns results for uppercase Apple query', function () {
     expect(count(array_filter($words, fn ($w) => strtolower($w) === 'apple')))->toBe(1);
 });
 
+it('prefers lowercase spelling when both casings exist for the same word', function () {
+    insertDictWords(['Apple', 'apple', 'APPLICATION', 'application']);
+
+    $response = $this->getJson('/dictionary/suggestions?q=app&offset=0');
+
+    $response->assertSuccessful();
+
+    $words = $response->json('words');
+    expect($words)->toContain('apple')
+        ->and($words)->toContain('application')
+        ->and($words)->not->toContain('Apple')
+        ->and($words)->not->toContain('APPLICATION');
+});
+
+it('supports offset pagination for short prefixes without 500', function () {
+    $words = array_map(
+        fn ($i) => 'a'.str_pad((string) $i, 4, '0', STR_PAD_LEFT),
+        range(1, 80),
+    );
+    insertDictWords($words);
+
+    $page1 = $this->getJson('/dictionary/suggestions?q=a&offset=0');
+    $page2 = $this->getJson('/dictionary/suggestions?q=a&offset=50');
+
+    $page1->assertSuccessful();
+    $page2->assertSuccessful();
+
+    expect($page1->json('words'))->toHaveCount(DictionarySearchController::PAGE_SIZE)
+        ->and($page1->json('has_more'))->toBeTrue()
+        ->and($page2->json('words'))->toHaveCount(30)
+        ->and($page2->json('has_more'))->toBeFalse();
+});
+
 it('returns results for can\'t query', function () {
     insertDictWords(["can't", "cannot"]);
 
