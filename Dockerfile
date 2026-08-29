@@ -53,11 +53,13 @@ FROM php:8.4-apache-bookworm
 
 ENV PORT=8080
 
-# System libs + PHP extensions required by Laravel + SQLite
+# System libs + PHP extensions required by Laravel
+# SQLite (local / fallback) + PostgreSQL (Neon / Cloud Run production)
 # (mbstring/curl/openssl/pdo/tokenizer/xml/ctype/fileinfo ship with this image)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libicu-dev \
+        libpq-dev \
         libsqlite3-dev \
         libzip-dev \
         unzip \
@@ -65,6 +67,7 @@ RUN apt-get update \
     && docker-php-ext-install -j"$(nproc)" \
         intl \
         opcache \
+        pdo_pgsql \
         pdo_sqlite \
         zip \
     && a2enmod rewrite headers \
@@ -89,16 +92,15 @@ COPY --from=vendor --chown=www-data:www-data /app/vendor ./vendor
 COPY --from=frontend --chown=www-data:www-data /app/public/build ./public/build
 
 # Temporary env for artisan during image build only (removed before the layer finishes).
-# Runtime secrets (APP_KEY, DEEPL_API_KEY, …) must come from Cloud Run env vars.
+# Runtime secrets and DB credentials come from Cloud Run env vars.
+# Do NOT migrate or seed external DBs (e.g. Neon) during image build —
+# run `php artisan migrate` and one-time `php artisan dictionary:import` against
+# the production database separately.
 RUN cp .env.example .env \
     && php artisan key:generate --force --no-interaction \
     && php artisan package:discover --ansi --no-interaction \
-    && mkdir -p database \
-    && touch database/database.sqlite \
-    && chown www-data:www-data database/database.sqlite \
-    && php artisan migrate --force --no-interaction \
-    && php artisan dictionary:import --no-interaction \
     && rm -f .env \
+    && mkdir -p database storage bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache database \
     && chmod -R ug+rwx storage bootstrap/cache database
 
