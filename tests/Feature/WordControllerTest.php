@@ -325,3 +325,69 @@ it('does not search japanese translations', function () {
         ->assertSee('該当する単語がありません')
         ->assertDontSee('apple');
 });
+
+it('deletes multiple words in one request', function () {
+    $apple = Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    $banana = Word::create(['english' => 'banana', 'japanese' => 'バナナ']);
+    $cherry = Word::create(['english' => 'cherry', 'japanese' => 'さくらんぼ']);
+
+    $response = $this->deleteJson('/words/bulk', [
+        'ids' => [$apple->id, $cherry->id],
+    ]);
+
+    $response
+        ->assertSuccessful()
+        ->assertJsonPath('deleted_count', 2);
+
+    expect($response->json('deleted_ids'))->toEqualCanonicalizing([
+        $apple->id,
+        $cherry->id,
+    ]);
+
+    $this->assertDatabaseMissing('words', ['id' => $apple->id]);
+    $this->assertDatabaseMissing('words', ['id' => $cherry->id]);
+    $this->assertDatabaseHas('words', ['id' => $banana->id]);
+});
+
+it('returns validation error when bulk delete ids is empty', function () {
+    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+
+    $response = $this->deleteJson('/words/bulk', [
+        'ids' => [],
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors('ids');
+
+    $this->assertDatabaseCount('words', 1);
+});
+
+it('returns error when bulk delete includes a missing id', function () {
+    $word = Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+
+    $response = $this->deleteJson('/words/bulk', [
+        'ids' => [$word->id, 99999],
+    ]);
+
+    $response->assertUnprocessable()
+        ->assertJson([
+            'message' => '削除対象の単語が見つかりません。',
+        ]);
+
+    $this->assertDatabaseHas('words', ['id' => $word->id]);
+});
+
+it('returns validation error when bulk delete ids is missing', function () {
+    $response = $this->deleteJson('/words/bulk', []);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors('ids');
+});
+
+it('shows the words selection controls on the index page', function () {
+    $response = $this->get('/words');
+
+    $response->assertSuccessful()
+        ->assertSee('data-words-select-toggle')
+        ->assertSee('選択');
+});

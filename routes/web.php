@@ -21,4 +21,5 @@ Route::get('/words', [WordController::class, 'index'])->name('words.index');
 Route::get('/words/create', [WordController::class, 'create'])->name('words.create');
 Route::post('/words', [WordController::class, 'store'])->name('words.store');
 Route::patch('/words/{word}/hard', [WordController::class, 'toggleHard'])->name('words.toggle-hard');
+Route::delete('/words/bulk', [WordController::class, 'destroyMany'])->name('words.destroy-many');
 Route::delete('/words/{word}', [WordController::class, 'destroy'])->name('words.destroy');
