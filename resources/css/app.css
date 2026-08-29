@@ -1838,6 +1838,7 @@ label:has(input:checked)>.choice-card__indicator {
     --home-blue-deep: #216fd1;
     --home-sky: #dfeeff;
     --home-line: #b9d2f2;
+    --home-yellow: #e7b93f;
 
     color: var(--home-ink);
 }
@@ -1914,7 +1915,7 @@ label:has(input:checked)>.choice-card__indicator {
 
 .home-hero__copy {
     position: absolute;
-    top: 29%;
+    top: 19%;
     left: 6.5%;
     z-index: 3;
     width: 56%;
@@ -2170,68 +2171,7 @@ label:has(input:checked)>.choice-card__indicator {
     border-radius: 999px;
 }
 
-/* Decorative waves */
 
-.home-wave {
-    position: relative;
-    flex: 1;
-    min-height: 150px;
-    overflow: hidden;
-    background: #f7fbff;
-}
-
-.home-wave__layer,
-.home-wave__line {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 200%;
-    height: 140px;
-    pointer-events: none;
-    transform: translateZ(0);
-}
-
-.home-wave__layer--back {
-    fill: #eef5ff;
-    animation: home-wave-slide 18s linear infinite;
-}
-
-.home-wave__layer--middle {
-    fill: #deebff;
-    animation: home-wave-slide 14s linear infinite reverse;
-}
-
-.home-wave__layer--front {
-    fill: #cbdfff;
-    animation: home-wave-slide 11s linear infinite;
-}
-
-.home-wave__line {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.9);
-    stroke-width: 2;
-    animation: home-wave-slide 16s linear infinite reverse;
-}
-
-.home-wave__circle {
-    position: absolute;
-    top: 28px;
-    right: 18%;
-    width: 52px;
-    height: 52px;
-    background: rgba(218, 233, 255, 0.55);
-    border-radius: 50%;
-}
-
-@keyframes home-wave-slide {
-    from {
-        transform: translate3d(0, 0, 0);
-    }
-
-    to {
-        transform: translate3d(-50%, 0, 0);
-    }
-}
 
 /* Home bottom navigation */
 
@@ -2258,6 +2198,10 @@ label:has(input:checked)>.choice-card__indicator {
 .page-home .bottom-nav__item.is-active::before {
     background: var(--home-blue);
 }
+
+/* ========================================
+   Home - Small Mobile
+======================================== */
 
 @media (max-width: 390px) {
     .page-home .app-main {
@@ -2310,24 +2254,157 @@ label:has(input:checked)>.choice-card__indicator {
         height: 38px;
     }
 
-
     .home-stat-card strong {
         font-size: 29px;
     }
 
-    .home-wave {
-        min-height: 135px;
+    .home-recent {
+        padding: 14px;
     }
 
-    .home-wave__layer,
-    .home-wave__line {
-        height: 125px;
+    .home-recent__grid {
+        gap: 7px;
+    }
+
+    .home-recent-card {
+        padding: 12px 9px;
+    }
+
+    .home-recent-card strong {
+        font-size: 14px;
     }
 }
 
-.page-home {
-    --home-yellow: #e7b93f;
+
+/* ========================================
+   Recent words
+======================================== */
+
+.home-recent {
+    margin-top: 16px;
+    padding: 17px;
+    background: #ffffff;
+    border: 1px solid #d7e6f6;
+    border-radius: 22px;
 }
+
+.home-recent__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.home-recent__head span {
+    display: block;
+    color: var(--home-blue);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+}
+
+.home-recent__head h2 {
+    margin: 4px 0 0;
+    color: var(--home-ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    font-weight: 500;
+}
+
+.home-recent__head > a {
+    flex: none;
+    color: var(--home-muted);
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.home-recent__head > a:hover {
+    color: var(--home-blue);
+}
+
+.home-recent__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+}
+
+.home-recent-card {
+    position: relative;
+    min-width: 0;
+    padding: 14px 12px;
+    background: #f8fbff;
+    border: 1px solid #dce9f7;
+    border-radius: 15px;
+    transition:
+        transform 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease;
+}
+
+.home-recent-card:hover {
+    border-color: #aecdf0;
+    box-shadow: 0 10px 22px rgba(49, 137, 237, 0.08);
+    transform: translateY(-2px);
+}
+
+.home-recent-card strong {
+    display: block;
+    overflow: hidden;
+    color: var(--home-ink);
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-recent-card p {
+    overflow: hidden;
+    margin: 6px 0 0;
+    color: var(--home-muted);
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.home-recent-card__star {
+    position: absolute;
+    top: 8px;
+    right: 9px;
+    color: var(--amber);
+    font-size: 10px;
+}
+
+.home-recent-card.is-hard strong {
+    padding-right: 15px;
+}
+
+.home-recent__empty {
+    padding: 16px;
+    text-align: center;
+    background: #f8fbff;
+    border-radius: 15px;
+}
+
+.home-recent__empty p {
+    margin: 0;
+    color: var(--home-muted);
+    font-size: 10px;
+}
+
+.home-recent__empty a {
+    display: inline-block;
+    margin-top: 8px;
+    color: var(--home-blue);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+
+/* ========================================
+   Home decoration
+======================================== */
 
 .home-hero__line {
     fill: none;
@@ -2341,8 +2418,12 @@ label:has(input:checked)>.choice-card__indicator {
 .home-hero__line--soft {
     stroke-width: 1;
     opacity: 0.5;
-
 }
+
+
+/* ========================================
+   Words
+======================================== */
 
 .page-words .app-main {
     background: linear-gradient(180deg, #f7fbff 0%, #ffffff 220px);
@@ -2354,11 +2435,14 @@ label:has(input:checked)>.choice-card__indicator {
 
 .page-words .word-row {
     background:
-        radial-gradient(circle at 100% 0%, rgba(223, 238, 255, 0.35), transparent 58px),
+        radial-gradient(
+            circle at 100% 0%,
+            rgba(223, 238, 255, 0.35),
+            transparent 58px
+        ),
         #ffffff;
     border-color: #d9e8f7;
 }
-
 
 .collection-tools__title {
     margin: 0 0 12px;

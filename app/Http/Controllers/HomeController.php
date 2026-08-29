@@ -13,6 +13,16 @@ class HomeController extends Controller
         $hardWords = Word::where('is_hard', true)->count();
         $featuredWord = Word::latest()->first();
 
-        return view('home', compact('totalWords', 'hardWords', 'featuredWord'));
+        // 最新の単語を3件取得
+        $recentWords = Word::latest()
+            ->take(3)
+            ->get();
+
+        return view('home', compact(
+            'totalWords',
+            'hardWords',
+            'featuredWord',
+            'recentWords'
+        ));
     }
 }
