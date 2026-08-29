@@ -56,7 +56,7 @@ Homestead.yaml
 /storage/*.key
 /bootstrap/cache/*.php
 
-# Local SQLite DB (schema + dictionary seed are created during image build)
+# Local SQLite DB (not baked into the image; production uses Neon PostgreSQL)
 /database/*.sqlite
 /database/*.sqlite-*
 
