@@ -50,13 +50,10 @@
             </div>
 
             <div class="study-stack" data-study-stack>
-                <div class="study-stack__layer study-stack__layer--3" data-stack-layer hidden aria-hidden="true">
+                <div class="study-stack__layer study-stack__layer--1" data-stack-layer hidden aria-hidden="true">
                     <span class="study-stack__text" data-stack-text></span>
                 </div>
                 <div class="study-stack__layer study-stack__layer--2" data-stack-layer hidden aria-hidden="true">
-                    <span class="study-stack__text" data-stack-text></span>
-                </div>
-                <div class="study-stack__layer study-stack__layer--1" data-stack-layer hidden aria-hidden="true">
                     <span class="study-stack__text" data-stack-text></span>
                 </div>
 

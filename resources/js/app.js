@@ -173,7 +173,6 @@ if (studyRoot) {
     const words = JSON.parse(dataElement?.textContent || '[]');
     const direction = studyRoot.dataset.direction || 'en-ja';
     const deck = studyRoot.querySelector('[data-study-deck]');
-    const studyStack = studyRoot.querySelector('[data-study-stack]');
     const stackLayers = studyRoot.querySelectorAll('[data-stack-layer]');
     const cardNumber = studyRoot.querySelector('[data-card-number]');
     const actions = studyRoot.querySelector('[data-study-actions]');
@@ -323,20 +322,29 @@ if (studyRoot) {
 
     const renderStackPreview = () => {
         const index = currentWordIndex();
+        const remainingIncludingCurrent = words.length - index;
+        // Keep a stable "front + 2 behind" look until the endgame.
+        const visibleBehind = Math.min(
+            2,
+            Math.max(0, remainingIncludingCurrent - 1),
+        );
 
         stackLayers.forEach((layer, offset) => {
-            const word = words[index + 1 + offset];
             const textElement = layer.querySelector('[data-stack-text]');
 
-            if (!word || !textElement) {
+            if (offset >= visibleBehind || !textElement) {
                 layer.hidden = true;
                 layer.setAttribute('aria-hidden', 'true');
+                if (textElement) {
+                    textElement.textContent = '';
+                }
                 return;
             }
 
+            const word = words[index + 1 + offset];
             layer.hidden = false;
             layer.setAttribute('aria-hidden', 'true');
-            textElement.textContent = questionFor(word);
+            textElement.textContent = word ? questionFor(word) : '';
         });
     };
 
@@ -449,14 +457,12 @@ if (studyRoot) {
             scheduleAnswerActionsReveal();
         }
 
-        studyStack?.classList.add('is-advancing-stack');
         top.classList.add('is-turning');
 
         window.setTimeout(() => {
             top.remove();
             pageElements.shift();
             markActivePage();
-            studyStack?.classList.remove('is-advancing-stack');
             hideAnswerActions();
 
             onComplete?.();
