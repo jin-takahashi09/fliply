@@ -26,7 +26,7 @@ class DictionaryMeaningsService
      *
      * @return array{english: string, candidates: list<array{topic: string, japanese: string, registered: bool, word_id: int|null}>, message: string|null}
      */
-    public function resolve(string $english): array
+    public function resolve(string $english, ?int $userId = null): array
     {
         $english = trim($english);
 
@@ -45,7 +45,7 @@ class DictionaryMeaningsService
             $cached = $this->filterPayloadCandidates($cached);
 
             if (($cached['candidates'] ?? []) !== []) {
-                return $this->attachRegistrationStatus($english, $cached);
+                return $this->attachRegistrationStatus($english, $cached, $userId);
             }
         }
 
@@ -55,7 +55,7 @@ class DictionaryMeaningsService
             Cache::put($cacheKey, $this->stripCacheMetadata($payload), self::CACHE_TTL_SECONDS);
         }
 
-        return $this->attachRegistrationStatus($english, $this->stripCacheMetadata($payload));
+        return $this->attachRegistrationStatus($english, $this->stripCacheMetadata($payload), $userId);
     }
 
     public static function cacheKeyFor(string $english): string
@@ -309,15 +309,20 @@ class DictionaryMeaningsService
      * @param  array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null}  $payload
      * @return array{english: string, candidates: list<array{topic: string, japanese: string, registered: bool, word_id: int|null}>, message: string|null}
      */
-    private function attachRegistrationStatus(string $english, array $payload): array
+    private function attachRegistrationStatus(string $english, array $payload, ?int $userId = null): array
     {
         $candidates = [];
 
         foreach ($payload['candidates'] ?? [] as $candidate) {
-            $existing = Word::query()
-                ->where('english', $english)
-                ->where('japanese', (string) $candidate['japanese'])
-                ->first();
+            $existing = null;
+
+            if ($userId !== null) {
+                $existing = Word::query()
+                    ->where('user_id', $userId)
+                    ->where('english', $english)
+                    ->where('japanese', (string) $candidate['japanese'])
+                    ->first();
+            }
 
             $candidates[] = [
                 'topic' => (string) ($candidate['topic'] ?? ''),

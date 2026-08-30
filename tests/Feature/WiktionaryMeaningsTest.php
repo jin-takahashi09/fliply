@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
 
+beforeEach(function () {
+    $this->user = actingAsUser();
+});
+
 // ---------------------------------------------------------------------------
 // Wikitext fixtures (minimal but representative)
 // ---------------------------------------------------------------------------
@@ -487,7 +491,7 @@ it('registered status is english+japanese pair specific', function () {
     $cand1 = 'できる、れる、られる';
     $cand2 = '缶';
 
-    Word::create(['english' => 'can', 'japanese' => $cand1, 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'can', 'japanese' => $cand1, 'is_hard' => false]);
 
     Http::fake([
         'en.wiktionary.org/*' => Http::response(wiktionaryResponse(canWikitext(), 'can'), 200),
@@ -507,8 +511,8 @@ it('unregister deletes only the matching english+japanese pair', function () {
     $cand1 = 'できる、れる、られる';
     $cand2 = '缶';
 
-    Word::create(['english' => 'can', 'japanese' => $cand1, 'is_hard' => false]);
-    Word::create(['english' => 'can', 'japanese' => $cand2, 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'can', 'japanese' => $cand1, 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'can', 'japanese' => $cand2, 'is_hard' => false]);
 
     Http::fake([
         'en.wiktionary.org/*' => Http::response(wiktionaryResponse(canWikitext(), 'can'), 200),
@@ -728,7 +732,7 @@ it('unregister deletes Australia candidate by english+japanese pair (normalized)
     $candidate = 'オーストラリア、濠太剌利、濠洲、豪州、濠、豪';
     $candidateWithArtifact = '[[オーストラリア、濠太剌利、濠洲、豪州、濠、豪';
 
-    Word::create(['english' => 'Australia', 'japanese' => $candidate, 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'Australia', 'japanese' => $candidate, 'is_hard' => false]);
 
     $this->deleteJson('/dictionary/words', [
         'english' => 'Australia',

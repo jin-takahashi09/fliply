@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -10,7 +11,10 @@ uses(RefreshDatabase::class);
  * container's plain HTTP connection.
  */
 it('treats X-Forwarded-Proto https as a secure request', function () {
+    $user = User::factory()->create();
+
     $response = $this
+        ->actingAs($user)
         ->withServerVariables([
             'HTTPS' => 'off',
             'SERVER_PORT' => '80',
@@ -34,7 +38,10 @@ it('treats X-Forwarded-Proto https as a secure request', function () {
 });
 
 it('keeps http asset URLs when the request is not behind a trusted https proxy', function () {
+    $user = User::factory()->create();
+
     $response = $this
+        ->actingAs($user)
         ->withServerVariables([
             'HTTPS' => 'off',
             'SERVER_PORT' => '80',

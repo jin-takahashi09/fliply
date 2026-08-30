@@ -28,6 +28,13 @@
 
             <span class="brand__name">Fliply</span>
         </a>
+
+        @auth
+            <form method="POST" action="{{ route('logout') }}" class="app-header__logout">
+                @csrf
+                <button type="submit" class="secondary-button">ログアウト</button>
+            </form>
+        @endauth
     </header>
     @endif
 

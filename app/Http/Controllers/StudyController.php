@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Word;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class StudyController extends Controller
 {
-    public function settings(): View
+    public function settings(Request $request): View
     {
+        $words = $request->user()->words();
+
         return view('study.settings', [
-            'totalWords' => Word::count(),
-            'hardWords' => Word::where('is_hard', true)->count(),
+            'totalWords' => $words->count(),
+            'hardWords' => (clone $words)->where('is_hard', true)->count(),
         ]);
     }
 
@@ -30,7 +31,8 @@ class StudyController extends Controller
             ? 'hard'
             : 'all';
 
-        $words = Word::query()
+        $words = $request->user()
+            ->words()
             ->when(
                 $scope === 'hard',
                 fn ($query) => $query->where('is_hard', true)
