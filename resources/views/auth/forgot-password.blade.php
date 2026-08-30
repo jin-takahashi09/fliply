@@ -1,6 +1,6 @@
 @extends('layouts.app', ['hideNav' => true])
 
-@section('title', 'ログイン - Fliply')
+@section('title', 'パスワード再設定 - Fliply')
 
 @section('content')
     <section class="auth-screen">
@@ -13,14 +13,15 @@
             </p>
 
             <header class="auth-heading">
-                <p class="eyebrow">LOGIN</p>
+                <p class="eyebrow">RESET</p>
+                <h1>パスワードを再設定。</h1>
             </header>
 
             @if (session('status'))
                 <p class="auth-status" role="status">{{ session('status') }}</p>
             @endif
 
-            <form method="POST" action="{{ route('login') }}" class="word-form auth-form">
+            <form method="POST" action="{{ route('password.email') }}" class="word-form auth-form">
                 @csrf
 
                 <div class="field-group">
@@ -45,38 +46,13 @@
                     @enderror
                 </div>
 
-                <div class="field-group">
-                    <label for="password">
-                        <span>パスワード</span>
-                        <small>PASSWORD</small>
-                    </label>
-                    <div class="field-control {{ $errors->has('password') ? 'has-error' : '' }}">
-                        <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            placeholder="パスワード"
-                            autocomplete="current-password"
-                            required
-                        >
-                    </div>
-                    @error('password')
-                        <p class="field-error" role="alert">{{ $message }}</p>
-                    @enderror
-                </div>
-
                 <button type="submit" class="primary-button auth-submit">
-                    ログイン
+                    再設定メールを送信
                 </button>
             </form>
 
             <p class="auth-switch">
-                <a href="{{ route('password.request') }}">パスワードを忘れた方 →</a>
-            </p>
-
-            <p class="auth-switch">
-                はじめてですか？
-                <a href="{{ route('register') }}">新規登録 →</a>
+                <a href="{{ route('login') }}">ログインへ戻る →</a>
             </p>
         </div>
     </section>
