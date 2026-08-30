@@ -3,6 +3,8 @@
 英単語学習アプリです。  
 辞書から単語を探して登録し、フラッシュカードで「めくりながら」定着させられます。
 
+**公開URL:** [https://fliply-git-270531249855.asia-southeast1.run.app/](https://fliply-git-270531249855.asia-southeast1.run.app/)
+
 ---
 
 ## アプリケーション概要
