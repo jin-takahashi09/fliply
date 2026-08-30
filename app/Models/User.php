@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -24,6 +25,21 @@ class User extends Authenticatable
     public function words(): HasMany
     {
         return $this->hasMany(Word::class);
+    }
+
+    /**
+     * @return HasOne<UserAvatar, $this>
+     */
+    public function avatar(): HasOne
+    {
+        return $this->hasOne(UserAvatar::class);
+    }
+
+    public function avatarVersion(): ?string
+    {
+        $updatedAt = $this->avatar()->value('updated_at');
+
+        return $updatedAt !== null ? "{$this->id}-{$updatedAt}" : null;
     }
 
     /**
