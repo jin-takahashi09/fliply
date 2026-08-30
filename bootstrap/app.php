@@ -23,6 +23,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 Request::HEADER_X_FORWARDED_PREFIX |
                 Request::HEADER_X_FORWARDED_AWS_ELB,
         );
+
+        // Temporary perf diagnostics — active only for ?perf=1 requests.
+        $middleware->prependToGroup('web', \App\Http\Middleware\PerformanceTimingMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
