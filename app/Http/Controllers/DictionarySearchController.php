@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\DictionaryWord;
-use App\Models\Word;
 use App\Services\DictionaryMeaningsService;
 use App\Services\WiktionaryClient;
 use Illuminate\Http\JsonResponse;
@@ -93,7 +92,7 @@ class DictionarySearchController extends Controller
     {
         $english = trim((string) $request->query('word', ''));
 
-        return response()->json($meaningsService->resolve($english));
+        return response()->json($meaningsService->resolve($english, $request->user()?->id));
     }
 
     public function store(Request $request): JsonResponse
@@ -116,7 +115,9 @@ class DictionarySearchController extends Controller
             ], 422);
         }
 
-        if (Word::query()
+        $user = $request->user();
+
+        if ($user->words()
             ->where('english', $validated['english'])
             ->where('japanese', $validated['japanese'])
             ->exists()
@@ -127,7 +128,7 @@ class DictionarySearchController extends Controller
             ], 409);
         }
 
-        $word = Word::create([
+        $word = $user->words()->create([
             'english' => $validated['english'],
             'japanese' => $validated['japanese'],
             'is_hard' => $request->boolean('is_hard'),
@@ -154,7 +155,8 @@ class DictionarySearchController extends Controller
 
         $validated['japanese'] = WiktionaryClient::normalizeJapaneseCandidate((string) $validated['japanese']);
 
-        $word = Word::query()
+        $word = $request->user()
+            ->words()
             ->where('english', $validated['english'])
             ->where('japanese', $validated['japanese'])
             ->first();

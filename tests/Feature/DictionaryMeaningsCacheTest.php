@@ -13,6 +13,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     Cache::flush();
+    $this->user = actingAsUser();
 });
 
 function cacheTestCanvasWikitext(): string
@@ -140,7 +141,7 @@ it('reflects current registration status even when meanings are cached', functio
     $before = $this->getJson('/dictionary/meanings?word=canvas')->assertSuccessful();
     expect($before->json('candidates.0.registered'))->toBeFalse();
 
-    Word::create([
+    Word::factory()->for($this->user)->create([
         'english' => 'canvas',
         'japanese' => '帆布、ズック',
         'is_hard' => false,

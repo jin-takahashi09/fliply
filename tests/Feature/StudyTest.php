@@ -5,9 +5,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+beforeEach(function () {
+    $this->user = actingAsUser();
+});
+
 it('shows the study settings with word counts', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
-    Word::create(['english' => 'resilient', 'japanese' => '回復力のある', 'is_hard' => true]);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'resilient', 'japanese' => '回復力のある', 'is_hard' => true]);
 
     $this->get(route('study.settings'))
         ->assertSuccessful()
@@ -18,8 +22,8 @@ it('shows the study settings with word counts', function () {
 });
 
 it('shows every word in an all-word study session', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
-    Word::create(['english' => 'resilient', 'japanese' => '回復力のある', 'is_hard' => true]);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'resilient', 'japanese' => '回復力のある', 'is_hard' => true]);
 
     $this->get(route('study.session', ['scope' => 'all']))
         ->assertSuccessful()
@@ -28,8 +32,8 @@ it('shows every word in an all-word study session', function () {
 });
 
 it('uses only hard words in a hard-word study session', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
-    Word::create(['english' => 'resilient', 'japanese' => '回復力のある', 'is_hard' => true]);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'resilient', 'japanese' => '回復力のある', 'is_hard' => true]);
 
     $this->get(route('study.session', ['scope' => 'hard']))
         ->assertSuccessful()
@@ -38,7 +42,7 @@ it('uses only hard words in a hard-word study session', function () {
 });
 
 it('renders flashcard study controls and completion placeholders', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $this->get(route('study.session'))
         ->assertSuccessful()
@@ -56,7 +60,7 @@ it('renders flashcard study controls and completion placeholders', function () {
 });
 
 it('embeds study words without changing is_hard in the database', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
         'is_hard' => false,
@@ -71,7 +75,7 @@ it('embeds study words without changing is_hard in the database', function () {
 });
 
 it('starts with english as the first question when direction is en-ja', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $this->get(route('study.session', ['direction' => 'en-ja']))
         ->assertSuccessful()
@@ -80,7 +84,7 @@ it('starts with english as the first question when direction is en-ja', function
 });
 
 it('starts with japanese as the first question when direction is ja-en', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $this->get(route('study.session', ['direction' => 'ja-en']))
         ->assertSuccessful()
@@ -89,7 +93,7 @@ it('starts with japanese as the first question when direction is ja-en', functio
 });
 
 it('supports japanese to english study direction in the session payload', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $this->get(route('study.session', ['direction' => 'ja-en']))
         ->assertSuccessful()

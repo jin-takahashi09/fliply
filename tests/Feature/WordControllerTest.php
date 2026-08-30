@@ -5,6 +5,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+beforeEach(function () {
+    $this->user = actingAsUser();
+});
+
 it('can access the words index page', function () {
     $response = $this->get('/words');
 
@@ -49,7 +53,7 @@ it('returns validation error when japanese is empty', function () {
 });
 
 it('deletes a word', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
     ]);
@@ -64,7 +68,7 @@ it('deletes a word', function () {
 });
 
 it('marks a normal word as hard', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
         'is_hard' => false,
@@ -78,7 +82,7 @@ it('marks a normal word as hard', function () {
 });
 
 it('unmarks a hard word', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'necessary',
         'japanese' => '必要な',
         'is_hard' => true,
@@ -92,7 +96,7 @@ it('unmarks a hard word', function () {
 });
 
 it('returns json when toggling hard via ajax', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
         'is_hard' => false,
@@ -111,7 +115,7 @@ it('returns json when toggling hard via ajax', function () {
 });
 
 it('returns json when unmarking hard via ajax', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'necessary',
         'japanese' => '必要な',
         'is_hard' => true,
@@ -130,13 +134,13 @@ it('returns json when unmarking hard via ajax', function () {
 });
 
 it('shows only hard words when filter is hard', function () {
-    Word::create([
+    Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
         'is_hard' => false,
     ]);
 
-    Word::create([
+    Word::factory()->for($this->user)->create([
         'english' => 'necessary',
         'japanese' => '必要な',
         'is_hard' => true,
@@ -152,13 +156,13 @@ it('shows only hard words when filter is hard', function () {
 });
 
 it('shows all words on the index page', function () {
-    Word::create([
+    Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
         'is_hard' => false,
     ]);
 
-    Word::create([
+    Word::factory()->for($this->user)->create([
         'english' => 'necessary',
         'japanese' => '必要な',
         'is_hard' => true,
@@ -174,7 +178,7 @@ it('shows all words on the index page', function () {
 });
 
 it('does not change english or japanese when toggling hard', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
         'is_hard' => false,
@@ -190,9 +194,9 @@ it('does not change english or japanese when toggling hard', function () {
 });
 
 it('searches english words by partial match', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
-    Word::create(['english' => 'application', 'japanese' => '応用']);
-    Word::create(['english' => 'banana', 'japanese' => 'バナナ']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'application', 'japanese' => '応用']);
+    Word::factory()->for($this->user)->create(['english' => 'banana', 'japanese' => 'バナナ']);
 
     $response = $this->get('/words?q=app');
 
@@ -203,7 +207,7 @@ it('searches english words by partial match', function () {
 });
 
 it('searches english words case-insensitively', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $response = $this->get('/words?q=APP');
 
@@ -212,8 +216,8 @@ it('searches english words case-insensitively', function () {
 });
 
 it('shows all words when the search query is empty', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
-    Word::create(['english' => 'banana', 'japanese' => 'バナナ']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'banana', 'japanese' => 'バナナ']);
 
     $response = $this->get('/words?q=');
 
@@ -223,9 +227,9 @@ it('shows all words when the search query is empty', function () {
 });
 
 it('combines english search with the hard filter', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => true]);
-    Word::create(['english' => 'application', 'japanese' => '応用', 'is_hard' => false]);
-    Word::create(['english' => 'banana', 'japanese' => 'バナナ', 'is_hard' => true]);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => true]);
+    Word::factory()->for($this->user)->create(['english' => 'application', 'japanese' => '応用', 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'banana', 'japanese' => 'バナナ', 'is_hard' => true]);
 
     $response = $this->get('/words?q=app&filter=hard');
 
@@ -236,7 +240,7 @@ it('combines english search with the hard filter', function () {
 });
 
 it('shows an empty search result page when nothing matches', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $response = $this->get('/words?q=zzz');
 
@@ -268,7 +272,7 @@ it('shows empty message when no words are registered', function () {
 });
 
 it('shows a word added via dictionary store on the words index', function () {
-    Word::create([
+    Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
         'is_hard' => false,
@@ -282,8 +286,8 @@ it('shows a word added via dictionary store on the words index', function () {
 });
 
 it('shows only non-hard words when filter is normal', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
-    Word::create(['english' => 'necessary', 'japanese' => '必要な', 'is_hard' => true]);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'necessary', 'japanese' => '必要な', 'is_hard' => true]);
 
     $response = $this->get('/words?filter=normal');
 
@@ -293,8 +297,8 @@ it('shows only non-hard words when filter is normal', function () {
 });
 
 it('shows all words when no filter is set', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
-    Word::create(['english' => 'necessary', 'japanese' => '必要な', 'is_hard' => true]);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'necessary', 'japanese' => '必要な', 'is_hard' => true]);
 
     $response = $this->get('/words');
 
@@ -304,9 +308,9 @@ it('shows all words when no filter is set', function () {
 });
 
 it('combines english search with the normal filter', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
-    Word::create(['english' => 'application', 'japanese' => '応用', 'is_hard' => true]);
-    Word::create(['english' => 'banana', 'japanese' => 'バナナ', 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご', 'is_hard' => false]);
+    Word::factory()->for($this->user)->create(['english' => 'application', 'japanese' => '応用', 'is_hard' => true]);
+    Word::factory()->for($this->user)->create(['english' => 'banana', 'japanese' => 'バナナ', 'is_hard' => false]);
 
     $response = $this->get('/words?q=app&filter=normal');
 
@@ -317,7 +321,7 @@ it('combines english search with the normal filter', function () {
 });
 
 it('does not search japanese translations', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $response = $this->get('/words?q=りんご');
 
@@ -327,9 +331,9 @@ it('does not search japanese translations', function () {
 });
 
 it('deletes multiple words in one request', function () {
-    $apple = Word::create(['english' => 'apple', 'japanese' => 'りんご']);
-    $banana = Word::create(['english' => 'banana', 'japanese' => 'バナナ']);
-    $cherry = Word::create(['english' => 'cherry', 'japanese' => 'さくらんぼ']);
+    $apple = Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
+    $banana = Word::factory()->for($this->user)->create(['english' => 'banana', 'japanese' => 'バナナ']);
+    $cherry = Word::factory()->for($this->user)->create(['english' => 'cherry', 'japanese' => 'さくらんぼ']);
 
     $response = $this->deleteJson('/words/bulk', [
         'ids' => [$apple->id, $cherry->id],
@@ -350,7 +354,7 @@ it('deletes multiple words in one request', function () {
 });
 
 it('returns validation error when bulk delete ids is empty', function () {
-    Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $response = $this->deleteJson('/words/bulk', [
         'ids' => [],
@@ -363,7 +367,7 @@ it('returns validation error when bulk delete ids is empty', function () {
 });
 
 it('returns error when bulk delete includes a missing id', function () {
-    $word = Word::create(['english' => 'apple', 'japanese' => 'りんご']);
+    $word = Word::factory()->for($this->user)->create(['english' => 'apple', 'japanese' => 'りんご']);
 
     $response = $this->deleteJson('/words/bulk', [
         'ids' => [$word->id, 99999],

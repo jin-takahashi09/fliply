@@ -48,3 +48,16 @@ function something()
 {
     // ..
 }
+
+function actingAsUser(?\App\Models\User $user = null): \App\Models\User
+{
+    $user ??= \App\Models\User::factory()->create();
+    test()->actingAs($user);
+
+    return $user;
+}
+
+function createWordFor(\App\Models\User $user, array $attributes = []): \App\Models\Word
+{
+    return \App\Models\Word::factory()->for($user)->create($attributes);
+}

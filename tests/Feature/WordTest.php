@@ -1,12 +1,17 @@
 <?php
 
+use App\Models\User;
 use App\Models\Word;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+beforeEach(function () {
+    $this->user = User::factory()->create();
+});
+
 it('can save a word with english and japanese', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
     ]);
@@ -21,7 +26,7 @@ it('can save a word with english and japanese', function () {
 });
 
 it('defaults is_hard to false when not specified', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
     ]);
@@ -37,7 +42,7 @@ it('defaults is_hard to false when not specified', function () {
 });
 
 it('casts is_hard to true when specified as true', function () {
-    $word = Word::create([
+    $word = Word::factory()->for($this->user)->create([
         'english' => 'apple',
         'japanese' => 'りんご',
         'is_hard' => true,

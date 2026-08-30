@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
-
 class WordController extends Controller
 {
     public function index(Request $request): View
@@ -17,7 +16,8 @@ class WordController extends Controller
         $filter = $request->query('filter');
         $q = trim((string) $request->query('q', ''));
 
-        $words = Word::query()
+        $words = $request->user()
+            ->words()
             ->when($q !== '', fn ($query) => $query->where('english', 'like', '%'.$q.'%'))
             ->when($filter === 'hard', fn ($query) => $query->where('is_hard', true))
             ->when($filter === 'normal', fn ($query) => $query->where('is_hard', false))
@@ -39,12 +39,12 @@ class WordController extends Controller
             'japanese' => ['required', 'string', 'max:255'],
         ]);
 
-        Word::create($validated);
+        $request->user()->words()->create($validated);
 
         return redirect()->route('words.index');
     }
 
-    public function destroy(Word $word): RedirectResponse
+    public function destroy(Request $request, Word $word): RedirectResponse
     {
         $word->delete();
 
@@ -61,7 +61,8 @@ class WordController extends Controller
         /** @var list<int> $ids */
         $ids = $validated['ids'];
 
-        $words = Word::query()
+        $words = $request->user()
+            ->words()
             ->whereIn('id', $ids)
             ->get();
 

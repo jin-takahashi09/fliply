@@ -137,6 +137,7 @@ it('returns empty words and no message when query is empty', function () {
 });
 
 it('dictionary_words do not appear on the words index page', function () {
+    actingAsUser();
     insertDictWords(['apple', 'apply', 'America']);
 
     $response = $this->get('/words');
