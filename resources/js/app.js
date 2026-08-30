@@ -1,6 +1,102 @@
 import '../css/app.css';
 /*
 |--------------------------------------------------------------------------
+| Header user menu
+|--------------------------------------------------------------------------
+*/
+document.querySelectorAll('[data-user-menu]').forEach((menu) => {
+    const trigger = menu.querySelector('[data-user-menu-trigger]');
+    const panel = menu.querySelector('[data-user-menu-panel]');
+
+    if (!trigger || !panel) {
+        return;
+    }
+
+    let isOpen = false;
+
+    const openMenu = () => {
+        isOpen = true;
+        panel.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+    };
+
+    const closeMenu = () => {
+        isOpen = false;
+        panel.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    trigger.addEventListener('click', (event) => {
+        event.stopPropagation();
+
+        if (isOpen) {
+            closeMenu();
+            return;
+        }
+
+        openMenu();
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!isOpen || menu.contains(event.target)) {
+            return;
+        }
+
+        closeMenu();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (!isOpen || event.key !== 'Escape') {
+            return;
+        }
+
+        closeMenu();
+        trigger.focus();
+    });
+});
+/*
+|--------------------------------------------------------------------------
+| Profile avatar preview
+|--------------------------------------------------------------------------
+*/
+document.querySelectorAll('[data-profile-avatar-picker]').forEach((picker) => {
+    const input = picker.querySelector('[data-profile-avatar-input]');
+    const preview = picker.querySelector('[data-profile-avatar-preview]');
+
+    if (!input || !preview) {
+        return;
+    }
+
+    let objectUrl = null;
+
+    input.addEventListener('change', () => {
+        const file = input.files?.[0];
+
+        if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+            objectUrl = null;
+        }
+
+        if (!file) {
+            return;
+        }
+
+        objectUrl = URL.createObjectURL(file);
+        preview.replaceChildren();
+
+        const image = document.createElement('img');
+        image.src = objectUrl;
+        image.alt = '';
+        image.width = 112;
+        image.height = 112;
+        image.className = 'user-menu__photo';
+        image.dataset.profileAvatarImage = '';
+
+        preview.append(image);
+    });
+});
+/*
+|--------------------------------------------------------------------------
 | Delete confirm
 |--------------------------------------------------------------------------
 */

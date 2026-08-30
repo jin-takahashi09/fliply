@@ -90,5 +90,14 @@
     <path d="m4 10 5-4 4 3 7-6" />
     <path d="M16 3h4v4" />
     @break
+    @case('user')
+    <circle cx="12" cy="8" r="3.5" />
+    <path d="M5 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1" />
+    @break
+    @case('logout')
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="M16 17l5-5-5-5" />
+    <path d="M21 12H9" />
+    @break
     @endswitch
 </svg>
