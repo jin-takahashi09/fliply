@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Notifications\ResetPasswordNotification;
+use App\Support\GmailAddress;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -41,10 +42,9 @@ it('shows a generic status message for unknown reset emails', function () {
             'email' => 'missing@example.com',
         ])
         ->assertRedirect(route('password.request'))
-        ->assertSessionHas(
-            'status',
-            '登録されている場合は、再設定メールを送信しました。',
-        )
+        ->assertSessionHas('password_reset_sent', true)
+        ->assertSessionHas('password_reset_email', 'missing@example.com')
+        ->assertSessionMissing('status')
         ->assertSessionMissing('errors');
 
     Notification::assertNothingSent();
@@ -73,10 +73,9 @@ it('sends a reset link notification to registered users', function () {
         ->post(route('password.email'), [
             'email' => 'reset@example.com',
         ])->assertRedirect(route('password.request'))
-        ->assertSessionHas(
-            'status',
-            '登録されている場合は、再設定メールを送信しました。',
-        );
+        ->assertSessionHas('password_reset_sent', true)
+        ->assertSessionHas('password_reset_email', 'reset@example.com')
+        ->assertSessionMissing('status');
 
     Notification::assertSentTo($user, ResetPasswordNotification::class);
 });
@@ -217,3 +216,82 @@ it('throttles repeated password reset requests', function () {
         ->assertRedirect(route('password.request'))
         ->assertSessionHasErrors('email');
 });
+
+it('shows the password reset sent screen after a successful request', function () {
+    Notification::fake();
+
+    User::factory()->create([
+        'email' => 'sent-ui@example.com',
+    ]);
+
+    $this->from(route('password.request'))
+        ->followingRedirects()
+        ->post(route('password.email'), [
+            'email' => 'sent-ui@example.com',
+        ])
+        ->assertOk()
+        ->assertSee('メールをご確認ください。')
+        ->assertSee('再設定用のリンクを送信しました。')
+        ->assertSee('sent-ui@example.com')
+        ->assertSee('ログインに戻る')
+        ->assertDontSee('登録されている場合は、再設定メールを送信しました。')
+        ->assertDontSee('再設定メールを送信')
+        ->assertDontSee('data-auto-dismiss', false);
+});
+
+it('shows the same sent screen for unknown emails', function () {
+    Notification::fake();
+
+    $this->from(route('password.request'))
+        ->followingRedirects()
+        ->post(route('password.email'), [
+            'email' => 'unknown@example.com',
+        ])
+        ->assertOk()
+        ->assertSee('メールをご確認ください。')
+        ->assertSee('再設定用のリンクを送信しました。')
+        ->assertSee('unknown@example.com')
+        ->assertDontSee('登録されている場合は、再設定メールを送信しました。');
+});
+
+it('shows a Gmail button for Gmail addresses', function (string $email) {
+    Notification::fake();
+
+    $this->from(route('password.request'))
+        ->followingRedirects()
+        ->post(route('password.email'), [
+            'email' => $email,
+        ])
+        ->assertOk()
+        ->assertSee('Gmailを開く ↗')
+        ->assertSee('https://mail.google.com/mail/', false)
+        ->assertSee('target="_blank"', false)
+        ->assertSee('rel="noopener noreferrer"', false);
+})->with([
+    'gmail.com' => ['user@gmail.com'],
+    'googlemail.com' => ['user@googlemail.com'],
+    'uppercase domain' => ['User@Gmail.COM'],
+]);
+
+it('does not show a Gmail button for non-Gmail addresses', function () {
+    Notification::fake();
+
+    $this->from(route('password.request'))
+        ->followingRedirects()
+        ->post(route('password.email'), [
+            'email' => 'user@example.com',
+        ])
+        ->assertOk()
+        ->assertDontSee('Gmailを開く')
+        ->assertDontSee('https://mail.google.com/mail/', false);
+});
+
+it('detects Gmail addresses by domain', function (string $email, bool $expected) {
+    expect(GmailAddress::isGmailAddress($email))->toBe($expected);
+})->with([
+    'gmail.com' => ['user@gmail.com', true],
+    'googlemail.com' => ['user@googlemail.com', true],
+    'other domain' => ['user@example.com', false],
+    'gmail substring' => ['user@notgmail.com', false],
+    'no at sign' => ['invalid-email', false],
+]);

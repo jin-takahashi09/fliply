@@ -41,9 +41,9 @@ class ForgotPasswordController extends Controller
                 ]);
         }
 
-        return back()->with(
-            'status',
-            '登録されている場合は、再設定メールを送信しました。',
-        );
+        return back()->with([
+            'password_reset_sent' => true,
+            'password_reset_email' => $request->input('email'),
+        ]);
     }
 }

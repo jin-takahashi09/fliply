@@ -4525,6 +4525,33 @@ body:has(.auth-screen) .app-main--focus {
     border-radius: 12px;
 }
 
+.auth-sent-message {
+    margin: 0 0 12px;
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1.7;
+    text-align: center;
+}
+
+.auth-sent-email {
+    margin: 0 0 var(--auth-space-submit);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.6;
+    text-align: center;
+    word-break: break-all;
+}
+
+.auth-gmail-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-top: 0;
+    text-decoration: none;
+}
+
 .auth-switch a {
     margin-left: 0.35em;
     color: var(--green);
