@@ -1,7 +1,8 @@
 # Fliply
 
 英単語学習アプリです。  
-辞書から単語を探して登録し、カードをめくる学習と、答えを入力して正誤判定する学習の両方で定着させられます。
+辞書から単語を探して登録し、カードをめくる学習と、答えを入力して正誤判定する学習の両方で英単語と  
+意味を定着させられます。
 
 **公開URL:** [https://fliply-git-270531249855.asia-southeast1.run.app](https://fliply-git-270531249855.asia-southeast1.run.app)
 
@@ -92,11 +93,11 @@ Fliply は、覚えたい英単語を自分で選び、フラッシュカード�
 
 | ログイン                                                 | ホーム                                                 |
 | ---------------------------------------------------- | --------------------------------------------------- |
-| ![ログイン](docs/screenshots/login.png)                  | ![ホーム](docs/screenshots/home.png)                   |
+| ![ログイン](docs/screenshots/login.png)                  | ![ホーム](docs/screenshots/home-screen.png)                   |
 | 辞書検索・追加                                              | 単語帳                                                 |
-| ![辞書検索](docs/screenshots/dictionary.png)             | ![単語帳](docs/screenshots/words.png)                  |
+| ![辞書検索](docs/screenshots/dictionary-search.png)             | ![単語帳](docs/screenshots/word-list.png)                  |
 | 学習設定                                                 | カード学習                                               |
-| ![学習設定](docs/screenshots/study-settings.png)         | ![カード学習](docs/screenshots/study.png)                |
+| ![学習設定](docs/screenshots/study-method-settings.png)         | ![カード学習](docs/screenshots/study-session.png)                |
 | カード学習（めくり後）                                          | 入力学習                                                |
 | ![カード学習・めくり後](docs/screenshots/study-flip.png)       | ![入力学習](docs/screenshots/study-input.png)           |
 | 入力学習（正解）                                             | 入力学習（不正解）                                           |
