@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
+use App\Notifications\ResetPasswordNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -78,7 +78,45 @@ it('sends a reset link notification to registered users', function () {
             '登録されている場合は、再設定メールを送信しました。',
         );
 
-    Notification::assertSentTo($user, ResetPassword::class);
+    Notification::assertSentTo($user, ResetPasswordNotification::class);
+});
+
+it('sends a Fliply branded password reset email', function () {
+    Notification::fake();
+
+    $user = User::factory()->create([
+        'email' => 'branded@example.com',
+    ]);
+
+    $this->post(route('password.email'), [
+        'email' => 'branded@example.com',
+    ]);
+
+    Notification::assertSentTo(
+        $user,
+        ResetPasswordNotification::class,
+        function (ResetPasswordNotification $notification) use ($user): bool {
+            $mail = $notification->toMail($user);
+            $htmlView = is_array($mail->view) ? $mail->view['html'] : $mail->view;
+            $html = view($htmlView, $mail->viewData)->render();
+            $expireMinutes = (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire');
+            $expectedUrl = url(route('password.reset', [
+                'token' => $notification->token,
+                'email' => $user->email,
+            ], false));
+
+            expect($mail->subject)->toBe('パスワード再設定のお知らせ | Fliply')
+                ->and($html)->toContain('Fliply')
+                ->and($html)->toContain('パスワードを再設定する')
+                ->and($html)->toContain("このリンクは{$expireMinutes}分間有効です。")
+                ->and($html)->toContain($expectedUrl)
+                ->and($html)->not->toContain('Laravel')
+                ->and($html)->not->toContain('Laravel Logo')
+                ->and($html)->not->toContain('laravel.com');
+
+            return true;
+        },
+    );
 });
 
 it('resets the password with a valid token', function () {
