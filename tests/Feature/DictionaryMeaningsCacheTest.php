@@ -5,6 +5,7 @@ use App\Services\DeepLClient;
 use App\Services\DictionaryMeaningsService;
 use App\Services\WiktionaryClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -97,7 +98,7 @@ it('uses the same cache key for Canvas canvas and CANVAS', function () {
 
     Http::assertSentCount(2);
     expect(DictionaryMeaningsService::cacheKeyFor('Canvas'))
-        ->toBe('dictionary:meanings:v3:canvas');
+        ->toBe('dictionary:meanings:v5:canvas');
 });
 
 it('caches DeepL fallback results and skips both APIs on second request', function () {
@@ -131,8 +132,8 @@ it('does not cache temporary API failures and retries on the next request', func
     expect($second->json('candidates.0.japanese'))->toBe('applesauce');
     expect(Cache::has(DictionaryMeaningsService::cacheKeyFor('applesauce')))->toBeFalse();
 
-    // Each attempt: en + ja + DeepL.
-    Http::assertSentCount(6);
+    // Each request: (en+ja) + 1 retry (en+ja) + DeepL.
+    Http::assertSentCount(10);
 });
 
 it('reflects current registration status even when meanings are cached', function () {
@@ -272,7 +273,7 @@ it('caches meanings for seven days', function () {
         );
 });
 
-it('uses cache version v3 and ignores stale v1 cache entries', function () {
+it('uses cache version v5 and ignores stale v1 cache entries', function () {
     fakeCanvasWiktionary();
 
     Cache::put('dictionary:meanings:v1:canvas', [
@@ -288,7 +289,7 @@ it('uses cache version v3 and ignores stale v1 cache entries', function () {
 
     expect($japaneseValues)->not->toContain('古いキャッシュ')
         ->and(DictionaryMeaningsService::cacheKeyFor('canvas'))
-        ->toBe('dictionary:meanings:v3:canvas');
+        ->toBe('dictionary:meanings:v5:canvas');
 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'en.wiktionary.org'));
 });
@@ -315,12 +316,54 @@ it('ignores stale v2 cache with English-only wabbit meaning and refetches', func
         ->and($japaneseValues)->not->toContain('wabbit (wabit)')
         ->and($japaneseValues)->not->toContain('wabbit')
         ->and(DictionaryMeaningsService::cacheKeyFor('wabbit'))
-        ->toBe('dictionary:meanings:v3:wabbit');
+        ->toBe('dictionary:meanings:v5:wabbit');
 
     Http::assertSent(fn ($request) => str_contains($request->url(), 'deepl.com'));
 });
 
-it('uses stale v2 cache miss to store english fallback in v3 when DeepL returns English', function () {
+it('ignores stale v3 cache and refetches with v5 key', function () {
+    fakeCanvasWiktionary();
+
+    Cache::put('dictionary:meanings:v3:canvas', [
+        'english' => 'canvas',
+        'candidates' => [
+            ['topic' => 'stale', 'japanese' => '古いv3キャッシュ'],
+        ],
+        'message' => null,
+    ], 3600);
+
+    $response = $this->getJson('/dictionary/meanings?word=canvas')->assertSuccessful();
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->not->toContain('古いv3キャッシュ')
+        ->and(DictionaryMeaningsService::cacheKeyFor('canvas'))
+        ->toBe('dictionary:meanings:v5:canvas');
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'en.wiktionary.org'));
+});
+
+it('ignores stale v4 cache and refetches with v5 key', function () {
+    fakeCanvasWiktionary();
+
+    Cache::put('dictionary:meanings:v4:canvas', [
+        'english' => 'canvas',
+        'candidates' => [
+            ['topic' => 'stale', 'japanese' => '古いv4キャッシュ'],
+        ],
+        'message' => null,
+    ], 3600);
+
+    $response = $this->getJson('/dictionary/meanings?word=canvas')->assertSuccessful();
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->not->toContain('古いv4キャッシュ')
+        ->and(DictionaryMeaningsService::cacheKeyFor('canvas'))
+        ->toBe('dictionary:meanings:v5:canvas');
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'en.wiktionary.org'));
+});
+
+it('uses stale v2 cache miss to store english fallback in v5 when DeepL returns English', function () {
     Http::fake([
         'en.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
         'ja.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
@@ -349,7 +392,7 @@ it('uses stale v2 cache miss to store english fallback in v3 when DeepL returns 
         ]);
 });
 
-it('uses valid english fallback v3 cache without refetching', function () {
+it('uses valid english fallback v5 cache without refetching', function () {
     Cache::put(DictionaryMeaningsService::cacheKeyFor('wabbit'), [
         'english' => 'wabbit',
         'candidates' => [
@@ -367,7 +410,7 @@ it('uses valid english fallback v3 cache without refetching', function () {
     Http::assertNothingSent();
 });
 
-it('uses valid Japanese v3 cache without refetching', function () {
+it('uses valid Japanese v5 cache without refetching', function () {
     Cache::put(DictionaryMeaningsService::cacheKeyFor('canvas'), [
         'english' => 'canvas',
         'candidates' => [
@@ -384,4 +427,161 @@ it('uses valid Japanese v3 cache without refetching', function () {
         ->toBe(['帆布、ズック']);
 
     Http::assertNothingSent();
+});
+
+function recordedUrlCount(string $needle): int
+{
+    return collect(Http::recorded())
+        ->filter(fn (array $pair) => str_contains($pair[0]->url(), $needle))
+        ->count();
+}
+
+it('retries Wiktionary once after 429 and uses the successful retry', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::sequence()
+            ->push('Too Many Requests', 429)
+            ->push(cacheTestWiktionaryResponse(cacheTestCanvasWikitext(), 'canvas'), 200),
+        'ja.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('SHOULD_NOT_BE_USED'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=canvas')->assertSuccessful();
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toContain('帆布、ズック')
+        ->and(recordedUrlCount('en.wiktionary.org'))->toBe(2)
+        ->and(recordedUrlCount('deepl.com'))->toBe(0);
+
+    expect(Cache::has(DictionaryMeaningsService::cacheKeyFor('canvas')))->toBeTrue();
+});
+
+it('falls back to DeepL after one failed Wiktionary retry', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response('Too Many Requests', 429),
+        'ja.wiktionary.org/*' => Http::response('Too Many Requests', 429),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('クラウド'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=cloudword')->assertSuccessful();
+
+    expect($response->json('candidates.0.japanese'))->toBe('クラウド')
+        ->and(recordedUrlCount('en.wiktionary.org'))->toBe(2)
+        ->and(recordedUrlCount('ja.wiktionary.org'))->toBe(2)
+        ->and(recordedUrlCount('deepl.com'))->toBe(1);
+});
+
+it('retries Wiktionary once after a timeout then falls back to DeepL', function () {
+    $wiktionaryCalls = 0;
+
+    Http::fake(function ($request) use (&$wiktionaryCalls) {
+        if (str_contains($request->url(), 'wiktionary.org')) {
+            $wiktionaryCalls++;
+            throw new ConnectionException('cURL error 28: Operation timed out after 4000 milliseconds');
+        }
+
+        return Http::response(cacheTestDeeplResponse('クラウド'), 200);
+    });
+
+    $response = $this->getJson('/dictionary/meanings?word=cloudword')->assertSuccessful();
+
+    expect($response->json('candidates.0.japanese'))->toBe('クラウド')
+        ->and($wiktionaryCalls)->toBe(4)
+        ->and(recordedUrlCount('deepl.com'))->toBe(1);
+});
+
+it('does not retry Wiktionary more than once', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response('Too Many Requests', 429),
+        'ja.wiktionary.org/*' => Http::response('Too Many Requests', 429),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('キャンディ'), 200),
+    ]);
+
+    $this->getJson('/dictionary/meanings?word=candyword')->assertSuccessful();
+
+    expect(recordedUrlCount('en.wiktionary.org'))->toBe(2)
+        ->and(recordedUrlCount('ja.wiktionary.org'))->toBe(2);
+});
+
+it('does not retry permanent HTTP 4xx client errors', function (int $status) {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response('Client Error', $status),
+        'ja.wiktionary.org/*' => Http::response('Client Error', $status),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('フォールバック'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=clienterrorword')->assertSuccessful();
+
+    expect($response->json('candidates.0.japanese'))->toBe('フォールバック')
+        ->and(recordedUrlCount('en.wiktionary.org'))->toBe(1)
+        ->and(recordedUrlCount('ja.wiktionary.org'))->toBe(1)
+        ->and(recordedUrlCount('deepl.com'))->toBe(1);
+})->with([400, 401, 403, 404]);
+
+it('still retries HTTP 5xx as a transient failure', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response('Internal Server Error', 500),
+        'ja.wiktionary.org/*' => Http::response('Internal Server Error', 500),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('フォールバック'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=servererrorword')->assertSuccessful();
+
+    expect($response->json('candidates.0.japanese'))->toBe('フォールバック')
+        ->and(recordedUrlCount('en.wiktionary.org'))->toBe(2)
+        ->and(recordedUrlCount('ja.wiktionary.org'))->toBe(2);
+});
+
+it('does not retry MediaWiki missingtitle responses', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'ja.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('アップルソース'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=applesauce')->assertSuccessful();
+
+    expect($response->json('candidates.0.japanese'))->toBe('アップルソース')
+        ->and(recordedUrlCount('en.wiktionary.org'))->toBe(1)
+        ->and(recordedUrlCount('ja.wiktionary.org'))->toBe(1)
+        ->and(recordedUrlCount('deepl.com'))->toBe(1);
+});
+
+it('caches DeepL-only results after Wiktionary 429 with a short TTL', function () {
+    Cache::spy();
+
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response('Too Many Requests', 429),
+        'ja.wiktionary.org/*' => Http::response('Too Many Requests', 429),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('クラウド'), 200),
+    ]);
+
+    $this->getJson('/dictionary/meanings?word=cloudword')->assertSuccessful();
+
+    Cache::shouldHaveReceived('put')
+        ->once()
+        ->with(
+            DictionaryMeaningsService::cacheKeyFor('cloudword'),
+            Mockery::type('array'),
+            DictionaryMeaningsService::DEEPL_FALLBACK_CACHE_TTL_SECONDS
+        );
+});
+
+it('caches genuine missing-title DeepL fallback with the long TTL', function () {
+    Cache::spy();
+
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'ja.wiktionary.org/*' => Http::response(cacheTestWiktionaryNotFound(), 200),
+        'api-free.deepl.com/*' => Http::response(cacheTestDeeplResponse('アップルソース'), 200),
+    ]);
+
+    $this->getJson('/dictionary/meanings?word=applesauce')->assertSuccessful();
+
+    Cache::shouldHaveReceived('put')
+        ->once()
+        ->with(
+            DictionaryMeaningsService::cacheKeyFor('applesauce'),
+            Mockery::type('array'),
+            DictionaryMeaningsService::CACHE_TTL_SECONDS
+        );
 });

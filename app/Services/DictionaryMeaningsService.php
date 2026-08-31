@@ -7,11 +7,13 @@ use Illuminate\Support\Facades\Cache;
 
 class DictionaryMeaningsService
 {
-    public const CACHE_VERSION = 'v3';
+    public const CACHE_VERSION = 'v5';
 
     public const CACHE_PREFIX = 'dictionary:meanings:'.self::CACHE_VERSION.':';
 
     public const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+    public const DEEPL_FALLBACK_CACHE_TTL_SECONDS = 60 * 30;
 
     public function __construct(
         private WiktionaryClient $wiktionary,
@@ -21,8 +23,9 @@ class DictionaryMeaningsService
     /**
      * Resolve dictionary meanings for an English word.
      *
-     * Meaning candidates are cached for 7 days. Registration status is always
-     * read fresh from the database on every request.
+     * Meaning candidates from Wiktionary are cached for 7 days.
+     * DeepL-only results after a transient Wiktionary failure use a shorter TTL.
+     * Registration status is always read fresh from the database on every request.
      *
      * @return array{english: string, candidates: list<array{topic: string, japanese: string, registered: bool, word_id: int|null}>, message: string|null}
      */
@@ -52,7 +55,11 @@ class DictionaryMeaningsService
         $payload = $this->fetchMeanings($english);
 
         if ($this->shouldCache($payload, $english)) {
-            Cache::put($cacheKey, $this->stripCacheMetadata($payload), self::CACHE_TTL_SECONDS);
+            Cache::put(
+                $cacheKey,
+                $this->stripCacheMetadata($payload),
+                $this->ttlFor($payload)
+            );
         }
 
         return $this->attachRegistrationStatus($english, $this->stripCacheMetadata($payload), $userId);
@@ -102,7 +109,17 @@ class DictionaryMeaningsService
     }
 
     /**
-     * @param  array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null, cache?: bool}  $payload
+     * @param  array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null, cache?: bool, cache_ttl?: int}  $payload
+     */
+    private function ttlFor(array $payload): int
+    {
+        $ttl = $payload['cache_ttl'] ?? self::CACHE_TTL_SECONDS;
+
+        return is_int($ttl) && $ttl > 0 ? $ttl : self::CACHE_TTL_SECONDS;
+    }
+
+    /**
+     * @param  array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null, cache?: bool, cache_ttl?: int}  $payload
      * @return array{english: string, candidates: list<array{topic: string, japanese: string}>, message: string|null}
      */
     private function stripCacheMetadata(array $payload): array
@@ -239,6 +256,14 @@ class DictionaryMeaningsService
             || $hasJapaneseFromWiktionary
             || ($deeplOk ?? false)
             || ($wiktResult['ok'] ?? false);
+
+        $usedDeeplOnly = $hasJapaneseCandidate
+            && ! $hasJapaneseFromWiktionary
+            && ($deeplOk ?? false);
+
+        $payload['cache_ttl'] = $usedDeeplOnly && ($wiktResult['transient'] ?? false)
+            ? self::DEEPL_FALLBACK_CACHE_TTL_SECONDS
+            : self::CACHE_TTL_SECONDS;
 
         return $payload;
     }

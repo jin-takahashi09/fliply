@@ -311,6 +311,32 @@ function rareOnlyWikitext(): string
 WIKITEXT;
 }
 
+function multitransWithForeignArchaicWikitext(): string
+{
+    // Reproduces the bridge-style bug: another language's {{qualifier|archaic}}
+    // inside {{multitrans|data=...}} must not label the Japanese sense archaic.
+    return <<<'WIKITEXT'
+==English==
+===Noun===
+====Translations====
+{{trans-top|construction or natural feature that spans a divide}}{{multitrans|data=
+* Japanese: {{tt+|ja|橋|tr=はし, hashi}}, {{tt+|ja|橋梁|tr=きょうりょう, kyōryō}}
+* Serbo-Croatian: {{tt|sh|ćùprija|f}} {{qualifier|archaic, poetic}}
+* Thai: {{tt+|th|ขัว}} {{qualifier|archaic}}
+}}
+{{trans-bottom}}
+{{trans-top|dental bridge}}
+* Japanese: {{tt+|ja|冠橋義歯|tr=かんきょうぎし, kankyo gishi}}
+{{trans-bottom}}
+{{trans-top|card game bridge}}
+* Japanese: {{tt+|ja|ブリッジ|tr=burijji}}
+{{trans-bottom}}
+{{trans-top|chess bridge}}
+* Japanese: {{tt+|ja|駒|tr=こま, koma}}
+{{trans-bottom}}
+WIKITEXT;
+}
+
 function wiktionaryResponse(string $wikitext, string $title = 'test'): array
 {
     return [
@@ -899,6 +925,21 @@ it('does not call DeepL when only special Wiktionary meanings exist', function (
 // 14-16. API error handling fallback strategy
 // ---------------------------------------------------------------------------
 
+it('does not apply archaic labels from another language line inside multitrans', function () {
+    Http::fake([
+        'en.wiktionary.org/*' => Http::response(wiktionaryResponse(multitransWithForeignArchaicWikitext(), 'spanword'), 200),
+    ]);
+
+    $response = $this->getJson('/dictionary/meanings?word=spanword');
+    $japaneseValues = collect($response->json('candidates'))->pluck('japanese')->all();
+
+    expect($japaneseValues)->toHaveCount(4)
+        ->and($japaneseValues[0])->toBe('橋、橋梁')
+        ->and($japaneseValues)->toContain('冠橋義歯')
+        ->and($japaneseValues)->toContain('ブリッジ')
+        ->and($japaneseValues)->toContain('駒');
+});
+
 it('does not mark a normal sense special because another language entry has an informal qualifier', function () {
     Http::fake([
         'en.wiktionary.org/*' => Http::response(wiktionaryResponse(<<<'WIKITEXT'
@@ -939,6 +980,7 @@ it('does not call DeepL when Wiktionary has candidates', function () {
 it('falls back to DeepL when Wiktionary returns 429 (and does not crash)', function () {
     Http::fake([
         'en.wiktionary.org/*' => Http::response('Too Many Requests', 429),
+        'ja.wiktionary.org/*' => Http::response('Too Many Requests', 429),
         'api-free.deepl.com/*' => Http::response(wiktDeeplResponse('アップルソース'), 200),
     ]);
 
@@ -950,6 +992,7 @@ it('falls back to DeepL when Wiktionary returns 429 (and does not crash)', funct
 it('falls back to DeepL when Wiktionary returns 5xx', function () {
     Http::fake([
         'en.wiktionary.org/*' => Http::response('Internal Server Error', 500),
+        'ja.wiktionary.org/*' => Http::response('Internal Server Error', 500),
         'api-free.deepl.com/*' => Http::response(wiktDeeplResponse('アップルソース'), 200),
     ]);
 
@@ -961,6 +1004,7 @@ it('falls back to DeepL when Wiktionary returns 5xx', function () {
 it('returns the searched english word when both Wiktionary and DeepL fail', function () {
     Http::fake([
         'en.wiktionary.org/*' => Http::response('error', 500),
+        'ja.wiktionary.org/*' => Http::response('error', 500),
         'api-free.deepl.com/*' => Http::response('error', 500),
     ]);
 

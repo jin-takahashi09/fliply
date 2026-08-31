@@ -7,6 +7,7 @@ use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Throwable;
 
 class WiktionaryClient
 {
@@ -15,6 +16,18 @@ class WiktionaryClient
     private const JA_ENDPOINT = 'https://ja.wiktionary.org/w/api.php';
 
     private const TIMEOUT_SECONDS = 4;
+
+    private const MAX_ATTEMPTS = 2;
+
+    private const RETRY_DELAY_MICROSECONDS = 250_000;
+
+    private const TRANSIENT_ERRORS = [
+        'rate_limited',
+        'timeout',
+        'connection',
+        'http',
+        'empty_response',
+    ];
 
     /**
      * Normalize Japanese candidates extracted from Wiktionary.
@@ -66,23 +79,44 @@ class WiktionaryClient
      *
      * Returns an empty array when nothing is found or on any error.
      *
-     * @return array{groups: list<array{topic: string, candidates: list<string>}>, ok: bool}
+     * @return array{groups: list<array{topic: string, candidates: list<string>}>, ok: bool, transient: bool, error: string|null}
      */
     public function meanings(string $english): array
     {
         $english = trim($english);
 
         if ($english === '') {
-            return ['groups' => [], 'ok' => true];
+            return ['groups' => [], 'ok' => true, 'transient' => false, 'error' => null];
         }
 
+        $result = $this->meaningsAttempt($english);
+
+        if ($result['groups'] !== [] || ! $result['transient']) {
+            return $result;
+        }
+
+        usleep(self::RETRY_DELAY_MICROSECONDS);
+
+        return $this->meaningsAttempt($english);
+    }
+
+    /**
+     * @return array{groups: list<array{topic: string, candidates: list<string>}>, ok: bool, transient: bool, error: string|null}
+     */
+    private function meaningsAttempt(string $english): array
+    {
         // Fetch English and Japanese Wiktionary pages in parallel to cut fallback latency.
         $pages = $this->fetchEnAndJaWikitext($english);
         $wikitext = $pages['en'];
         $jaWikitext = $pages['ja'];
 
         if ($wikitext === null && $jaWikitext === null) {
-            return ['groups' => [], 'ok' => false];
+            return [
+                'groups' => [],
+                'ok' => false,
+                'transient' => $pages['transient'],
+                'error' => $pages['error'],
+            ];
         }
 
         $groups = [];
@@ -121,7 +155,14 @@ class WiktionaryClient
         $groups = $this->deduplicateCandidatesAcrossGroups($groups, $english);
         $groups = $this->filterGroupsWithValidJapaneseCandidates($groups);
 
-        return ['groups' => $groups, 'ok' => true];
+        $stillEmptyAfterParse = $groups === [];
+
+        return [
+            'groups' => $groups,
+            'ok' => true,
+            'transient' => $stillEmptyAfterParse && $pages['transient'],
+            'error' => $stillEmptyAfterParse ? $pages['error'] : null,
+        ];
     }
 
     // -------------------------------------------------------------------------
@@ -136,7 +177,7 @@ class WiktionaryClient
     }
 
     /**
-     * @return array{en: string|null, ja: string|null}
+     * @return array{en: string|null, ja: string|null, transient: bool, error: string|null}
      */
     private function fetchEnAndJaWikitext(string $english): array
     {
@@ -161,9 +202,14 @@ class WiktionaryClient
                 ]),
         ]);
 
+        $en = $this->classifyHttpResult($responses['en'] ?? null);
+        $ja = $this->classifyHttpResult($responses['ja'] ?? null);
+
         return [
-            'en' => $this->wikitextFromResponse($responses['en'] ?? null),
-            'ja' => $this->wikitextFromResponse($responses['ja'] ?? null),
+            'en' => $en['wikitext'],
+            'ja' => $ja['wikitext'],
+            'transient' => $this->isTransientFetch($en) || $this->isTransientFetch($ja),
+            'error' => $this->preferredError($en['error'], $ja['error']),
         ];
     }
 
@@ -185,38 +231,106 @@ class WiktionaryClient
             return null;
         }
 
-        return $this->wikitextFromResponse($response);
+        return $this->classifyHttpResult($response)['wikitext'];
     }
 
     /**
-     * Extract parse.wikitext.* from a Wiktionary API response.
+     * Classify a pooled HTTP result or exception into wikitext + error code.
+     *
+     * @return array{wikitext: string|null, error: string|null}
      */
-    private function wikitextFromResponse(mixed $response): ?string
+    private function classifyHttpResult(mixed $result): array
     {
-        if (! $response instanceof Response) {
-            return null;
+        if ($result instanceof ConnectionException) {
+            return [
+                'wikitext' => null,
+                'error' => $this->isTimeoutException($result) ? 'timeout' : 'connection',
+            ];
         }
 
-        // Treat 429 and any non-2xx as a soft failure → DeepL fallback.
-        if ($response->failed()) {
-            return null;
+        if ($result instanceof Throwable) {
+            return ['wikitext' => null, 'error' => 'connection'];
         }
 
-        if (isset($response->json()['error'])) {
-            return null;
+        if (! $result instanceof Response) {
+            return ['wikitext' => null, 'error' => 'connection'];
         }
 
-        // The Wiktionary API stores wikitext under the literal key "*".
-        // Laravel's json() treats "*" as a wildcard, so we access the raw array directly.
-        $wikitextKey = $response->json('parse.wikitext');
+        if ($result->status() === 429) {
+            return ['wikitext' => null, 'error' => 'rate_limited'];
+        }
+
+        $status = $result->status();
+
+        // Permanent client errors: waiting/retrying will not help.
+        if ($status >= 400 && $status < 500) {
+            return ['wikitext' => null, 'error' => 'client_error'];
+        }
+
+        // Temporary upstream/server failures.
+        if ($status >= 500) {
+            return ['wikitext' => null, 'error' => 'http'];
+        }
+
+        $json = $result->json();
+
+        if (is_array($json) && isset($json['error'])) {
+            $code = $json['error']['code'] ?? '';
+
+            if ($code === 'missingtitle') {
+                return ['wikitext' => null, 'error' => 'not_found'];
+            }
+
+            // Other MediaWiki API errors on HTTP 200 are not transient.
+            return ['wikitext' => null, 'error' => 'client_error'];
+        }
+
+        $wikitextKey = $result->json('parse.wikitext');
 
         if (! is_array($wikitextKey) || ! isset($wikitextKey['*'])) {
-            return null;
+            return ['wikitext' => null, 'error' => 'empty_response'];
         }
 
         $wikitext = $wikitextKey['*'];
 
-        return is_string($wikitext) ? $wikitext : null;
+        if (! is_string($wikitext) || trim($wikitext) === '') {
+            return ['wikitext' => null, 'error' => 'empty_response'];
+        }
+
+        return ['wikitext' => $wikitext, 'error' => null];
+    }
+
+    /**
+     * @param  array{wikitext: string|null, error: string|null}  $fetch
+     */
+    private function isTransientFetch(array $fetch): bool
+    {
+        return $fetch['wikitext'] === null && $this->isTransientError($fetch['error']);
+    }
+
+    private function isTransientError(?string $error): bool
+    {
+        return in_array($error, self::TRANSIENT_ERRORS, true);
+    }
+
+    private function preferredError(?string $first, ?string $second): ?string
+    {
+        foreach (['rate_limited', 'timeout', 'connection', 'http', 'empty_response', 'client_error', 'not_found'] as $code) {
+            if ($first === $code || $second === $code) {
+                return $code;
+            }
+        }
+
+        return $first ?? $second;
+    }
+
+    private function isTimeoutException(ConnectionException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'timed out')
+            || str_contains($message, 'timeout')
+            || str_contains($message, 'curl error 28');
     }
 
     /**
@@ -480,19 +594,6 @@ class WiktionaryClient
 
         $groupOrder = 0;
 
-        $rareKeywords = ['rare', 'archaic', 'obsolete', 'dated', 'historical'];
-        $derivedKeywords = [
-            // figurative / metaphor / by extension
-            'figurative',
-            'figuratively',
-            'metaphor',
-            'metaphorical',
-            'metaphorically',
-            'by extension',
-            'extension',
-            'metonym',
-        ];
-
         foreach (explode("\n", $wikitext) as $line) {
             // Track part-of-speech headings like: ===Verb=== / ===Noun===
             if (preg_match('/^===([^=]+)===\s*$/', $line, $m)) {
@@ -521,22 +622,12 @@ class WiktionaryClient
                 $inTransBlock = false;
 
                 if ($currentCandidates !== []) {
-                    $blockText = mb_strtolower(implode("\n", $blockLines));
+                    $blockText = implode("\n", $blockLines);
+                    $senseText = mb_strtolower($this->extractSenseLevelBlockText($blockText));
 
-                    $labels = [];
-                    foreach ($rareKeywords as $kw) {
-                        if (str_contains($blockText, $kw)) {
-                            $labels[] = $kw;
-                        }
-                    }
+                    $labels = $this->extractRareLabels($senseText);
 
-                    $hasDerived = false;
-                    foreach ($derivedKeywords as $kw) {
-                        if (str_contains($blockText, $kw)) {
-                            $hasDerived = true;
-                            break;
-                        }
-                    }
+                    $hasDerived = $this->senseHasDerivedMarker($senseText);
 
                     $groups[] = [
                         'topic'            => $currentTopic,
@@ -544,8 +635,8 @@ class WiktionaryClient
                         'part_of_speech'  => $currentPartOfSpeech,
                         'etymology_id'    => $currentEtymologyId,
                         'source_order'    => $currentBlockOrder,
-                        'labels'          => $labels,     // rare/archaic/etc labels found in this group
-                        'is_derived'      => $hasDerived, // figurative/by extension/metaphorical
+                        'labels'          => $labels,
+                        'is_derived'      => $hasDerived,
                         'is_special'      => $this->detectSpecialMeaning($blockText),
                     ];
                 }
@@ -631,6 +722,72 @@ class WiktionaryClient
         }
 
         return implode("\n", $senseLines);
+    }
+
+    /**
+     * Extract rare/archaic/obsolete labels from sense-level metadata only.
+     *
+     * @return list<string>
+     */
+    private function extractRareLabels(string $senseText): array
+    {
+        $labels = [];
+
+        foreach (['rare', 'archaic', 'obsolete', 'dated', 'historical'] as $keyword) {
+            if ($this->senseTextContainsKeyword($senseText, $keyword)) {
+                $labels[] = $keyword;
+            }
+        }
+
+        return $labels;
+    }
+
+    /**
+     * Whether sense-level metadata marks a figurative / by-extension sense.
+     */
+    private function senseHasDerivedMarker(string $senseText): bool
+    {
+        foreach ([
+            'figurative',
+            'figuratively',
+            'metaphor',
+            'metaphorical',
+            'metaphorically',
+            'by extension',
+            'metonym',
+        ] as $keyword) {
+            if ($this->senseTextContainsKeyword($senseText, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Match Wiktionary sense labels/qualifiers without scanning per-language lines.
+     */
+    private function senseTextContainsKeyword(string $text, string $keyword): bool
+    {
+        $escaped = preg_quote($keyword, '/');
+
+        if (preg_match('/\{\{qualifier\|[^}]*\b'.$escaped.'\b/', $text)) {
+            return true;
+        }
+
+        if (preg_match('/\{\{lb\|[^}|]*\|\s*'.$escaped.'\b/', $text)) {
+            return true;
+        }
+
+        if (preg_match('/\{\{sense\|[^}]*\b'.$escaped.'\b/', $text)) {
+            return true;
+        }
+
+        if (preg_match('/\{\{trans-top\|[^}]*\b'.$escaped.'\b/', $text)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
