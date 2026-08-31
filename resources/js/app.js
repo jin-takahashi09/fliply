@@ -1,4 +1,8 @@
 import '../css/app.css';
+import {
+    initJapaneseReading,
+    isStudyAnswerCorrect,
+} from './study-answer-checker';
 /*
 |--------------------------------------------------------------------------
 | Header user menu
@@ -677,12 +681,10 @@ if (studyRoot) {
     const dataElement = document.querySelector('#study-words');
     const words = JSON.parse(dataElement?.textContent || '[]');
     const direction = studyRoot.dataset.direction || 'en-ja';
-    const deck = studyRoot.querySelector('[data-study-deck]');
-    const stackLayers = studyRoot.querySelectorAll('[data-stack-layer]');
-    const cardNumber = studyRoot.querySelector('[data-card-number]');
-    const actions = studyRoot.querySelector('[data-study-actions]');
+    const method = studyRoot.dataset.method || 'flip';
     const progressLabel = document.querySelector('[data-progress-label]');
     const progressBar = studyRoot.querySelector('[data-progress-bar]');
+    const cardNumber = studyRoot.querySelector('[data-card-number]');
     const completeScreen = document.querySelector('[data-complete]');
     const correctCountElement =
         completeScreen?.querySelector('[data-correct-count]');
@@ -696,22 +698,10 @@ if (studyRoot) {
         completeScreen?.querySelector('[data-incorrect-list]');
     const incorrectSectionElement =
         completeScreen?.querySelector('[data-incorrect-section]');
-    const incorrectButton =
-        actions?.querySelector('[data-answer="incorrect"]');
-    const correctButton =
-        actions?.querySelector('[data-answer="correct"]');
 
-    const PAGE_TURN_MS = 700;
-    const ANSWER_ACTIONS_REVEAL_MS = Math.round(PAGE_TURN_MS * 0.72);
-
-    let pageElements = [];
     let correctCount = 0;
     let incorrectCount = 0;
     let incorrectWords = [];
-    let isAnimating = false;
-    let answerActionsRevealed = false;
-    let pendingAdvanceAfterPeel = false;
-    let revealActionsTimerId = null;
 
     const wordSides = (word) =>
         direction === 'en-ja'
@@ -721,6 +711,510 @@ if (studyRoot) {
     const questionFor = (word) => wordSides(word).question;
 
     const answerFor = (word) => wordSides(word).answer;
+
+    const renderIncorrectList = () => {
+        if (!incorrectListElement || !incorrectSectionElement) {
+            return;
+        }
+
+        incorrectListElement.replaceChildren();
+
+        if (incorrectWords.length === 0) {
+            incorrectSectionElement.hidden = true;
+
+            if (perfectMessageElement) {
+                perfectMessageElement.hidden = false;
+            }
+
+            return;
+        }
+
+        incorrectSectionElement.hidden = false;
+
+        if (perfectMessageElement) {
+            perfectMessageElement.hidden = true;
+        }
+
+        incorrectWords.forEach((word) => {
+            const item = document.createElement('li');
+            const question = document.createElement('strong');
+            const answer = document.createElement('span');
+
+            question.textContent = questionFor(word);
+            answer.textContent = answerFor(word);
+            item.append(question, answer);
+            incorrectListElement.append(item);
+        });
+    };
+
+    const finishStudy = () => {
+        studyRoot.hidden = true;
+
+        if (completeScreen) {
+            completeScreen.hidden = false;
+        }
+
+        if (correctCountElement) {
+            correctCountElement.textContent = String(correctCount);
+        }
+
+        if (incorrectCountElement) {
+            incorrectCountElement.textContent = String(incorrectCount);
+        }
+
+        if (completeSummaryElement) {
+            completeSummaryElement.textContent =
+                `${words.length}問中 ${correctCount}問正解`;
+        }
+
+        renderIncorrectList();
+
+        if (progressLabel) {
+            progressLabel.textContent = '完了';
+        }
+    };
+
+    const PAGE_TURN_MS = 700;
+
+    const createPaperBack = () => {
+        const back = document.createElement('div');
+        back.className = 'study-page__sheet study-page__sheet--back';
+        back.setAttribute('aria-hidden', 'true');
+
+        const line = document.createElement('span');
+        line.className = 'study-page__paper-line';
+        line.setAttribute('aria-hidden', 'true');
+        back.append(line);
+
+        return back;
+    };
+
+    const createStudyMark = (isCorrect) => {
+        const mark = document.createElement('div');
+        mark.className = `study-mark study-mark--${isCorrect ? 'correct' : 'incorrect'}`;
+        mark.setAttribute('aria-hidden', 'true');
+
+        if (isCorrect) {
+            mark.innerHTML = `
+                <svg viewBox="0 0 100 100" role="presentation">
+                    <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" pathLength="1" />
+                </svg>
+            `;
+        } else {
+            mark.innerHTML = `
+                <svg viewBox="0 0 100 100" role="presentation">
+                    <polyline points="22,54 40,72 78,30" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" pathLength="1" />
+                </svg>
+            `;
+        }
+
+        return mark;
+    };
+
+    if (method === 'input') {
+        const deck = studyRoot.querySelector('[data-study-deck]');
+        const stackLayers = studyRoot.querySelectorAll('[data-stack-layer]');
+        const inputActions = studyRoot.querySelector('[data-study-input-actions]');
+        const nextButton = studyRoot.querySelector('[data-study-next]');
+        const answerLabel = studyRoot.dataset.answerLabel || '答える';
+
+        let pageElements = [];
+        let isAnimating = false;
+        let isJudged = false;
+        let isCheckingAnswer = false;
+
+        if (direction === 'en-ja') {
+            initJapaneseReading().catch((error) => {
+                console.error('Failed to initialize Japanese reading:', error);
+            });
+        }
+
+        const getTopPage = () => pageElements[0] ?? null;
+
+        const currentWordIndex = () => {
+            const top = getTopPage();
+            return top ? Number(top.dataset.wordIndex) : 0;
+        };
+
+        const updateProgress = () => {
+            const index = currentWordIndex();
+            const word = words[index];
+            if (!word) {
+                return;
+            }
+
+            cardNumber.textContent =
+                `CARD ${String(index + 1).padStart(2, '0')}`;
+            progressLabel.textContent =
+                `${index + 1} / ${words.length}`;
+            progressBar.style.width =
+                `${((index + 1) / words.length) * 100}%`;
+        };
+
+        const renderStackPreview = () => {
+            const index = currentWordIndex();
+            const remainingIncludingCurrent = words.length - index;
+            const visibleBehind = Math.min(
+                2,
+                Math.max(0, remainingIncludingCurrent - 1),
+            );
+
+            stackLayers.forEach((layer, offset) => {
+                const textElement = layer.querySelector('[data-stack-text]');
+
+                if (offset >= visibleBehind || !textElement) {
+                    layer.hidden = true;
+                    layer.setAttribute('aria-hidden', 'true');
+                    if (textElement) {
+                        textElement.textContent = '';
+                    }
+                    return;
+                }
+
+                const word = words[index + 1 + offset];
+                layer.hidden = false;
+                layer.setAttribute('aria-hidden', 'true');
+                textElement.textContent = word ? questionFor(word) : '';
+            });
+        };
+
+        const setInputActionsVisible = (visible) => {
+            if (!inputActions) {
+                return;
+            }
+
+            inputActions.hidden = !visible;
+            inputActions.setAttribute('aria-hidden', visible ? 'false' : 'true');
+            inputActions.classList.toggle('is-revealed', visible);
+        };
+
+        const createInputPageElement = (word, wordIndex, zIndex) => {
+            const page = document.createElement('div');
+            page.className = 'study-page';
+            page.dataset.pageType = 'input-question';
+            page.dataset.wordIndex = String(wordIndex);
+            page.style.zIndex = String(zIndex);
+
+            const front = document.createElement('div');
+            front.className = 'study-page__sheet study-page__sheet--front';
+
+            const card = document.createElement('article');
+            card.className = 'study-card study-card--question study-card--input';
+
+            const label = document.createElement('span');
+            label.className = 'study-card__label';
+            label.textContent = 'QUESTION';
+
+            const body = document.createElement('div');
+            body.className = 'study-input-body';
+            body.dataset.studyInputBody = '';
+
+            const question = document.createElement('strong');
+            question.className = 'study-card__question';
+            question.textContent = questionFor(word);
+
+            const form = document.createElement('form');
+            form.className = 'study-input-form word-form';
+            form.dataset.studyInputForm = '';
+            form.noValidate = true;
+
+            const fieldGroup = document.createElement('div');
+            fieldGroup.className = 'field-group';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = `study-answer-input-${wordIndex}`;
+            input.name = 'answer';
+            input.dataset.studyAnswerInput = '';
+            input.autocomplete = 'off';
+            input.autocapitalize = 'off';
+            input.spellcheck = false;
+            input.required = true;
+            input.placeholder = '回答を入力';
+
+            const srLabel = document.createElement('label');
+            srLabel.className = 'sr-only';
+            srLabel.htmlFor = input.id;
+            srLabel.textContent = answerLabel;
+
+            const fieldControl = document.createElement('div');
+            fieldControl.className = 'field-control';
+            fieldControl.append(input);
+
+            fieldGroup.append(srLabel, fieldControl);
+
+            const submitButton = document.createElement('button');
+            submitButton.type = 'submit';
+            submitButton.className = 'primary-button study-input-submit';
+            submitButton.dataset.studyAnswerSubmit = '';
+            submitButton.textContent = '回答する';
+
+            form.append(fieldGroup, submitButton);
+            body.append(question, form);
+
+            const overlay = document.createElement('div');
+            overlay.className = 'study-input-overlay';
+            overlay.dataset.studyInputFeedback = '';
+            overlay.hidden = true;
+
+            const liveStatus = document.createElement('p');
+            liveStatus.className = 'sr-only';
+            liveStatus.dataset.studyLiveStatus = '';
+            liveStatus.setAttribute('role', 'status');
+
+            const stage = document.createElement('div');
+            stage.className = 'study-input-overlay__stage';
+
+            const userAnswerDisplay = document.createElement('p');
+            userAnswerDisplay.className = 'study-input-overlay__answer';
+            userAnswerDisplay.dataset.studyUserAnswerDisplay = '';
+
+            const markSlot = document.createElement('div');
+            markSlot.className = 'study-input-overlay__mark';
+            markSlot.dataset.studyMarkSlot = '';
+
+            stage.append(userAnswerDisplay, markSlot);
+
+            const correctReveal = document.createElement('div');
+            correctReveal.className = 'study-input-overlay__correct-note';
+            correctReveal.dataset.studyCorrectReveal = '';
+            correctReveal.hidden = true;
+
+            const correctNoteLabel = document.createElement('span');
+            correctNoteLabel.className = 'study-input-overlay__correct-label';
+            correctNoteLabel.textContent = '正解';
+
+            const answerText = document.createElement('span');
+            answerText.className = 'study-input-overlay__correct-text';
+            answerText.dataset.studyCorrectText = '';
+
+            correctReveal.append(correctNoteLabel, answerText);
+            overlay.append(stage, correctReveal, liveStatus);
+
+            card.append(label, body, overlay);
+            front.append(card);
+            page.append(front, createPaperBack());
+
+            return page;
+        };
+
+        const markActivePage = () => {
+            pageElements.forEach((page, index) => {
+                page.classList.toggle('is-active-page', index === 0);
+            });
+        };
+
+        const buildDeck = () => {
+            if (!deck) {
+                return;
+            }
+
+            deck.replaceChildren();
+            pageElements = [];
+
+            const totalPages = words.length;
+
+            words.forEach((word, wordIndex) => {
+                const page = createInputPageElement(
+                    word,
+                    wordIndex,
+                    totalPages - wordIndex,
+                );
+                deck.append(page);
+                pageElements.push(page);
+            });
+
+            markActivePage();
+        };
+
+        const resetPageState = (page) => {
+            const card = page.querySelector('.study-card--input');
+            const overlay = page.querySelector('[data-study-input-feedback]');
+            const markSlot = page.querySelector('[data-study-mark-slot]');
+            const input = page.querySelector('[data-study-answer-input]');
+            const submitButton = page.querySelector('[data-study-answer-submit]');
+            const correctReveal = page.querySelector('[data-study-correct-reveal]');
+            const liveStatus = page.querySelector('[data-study-live-status]');
+
+            const userAnswerDisplay = page.querySelector('[data-study-user-answer-display]');
+            markSlot?.replaceChildren();
+            userAnswerDisplay.textContent = '';
+            card?.classList.remove('is-judged');
+            overlay.hidden = true;
+            correctReveal.hidden = true;
+            liveStatus.textContent = '';
+            input.value = '';
+            input.disabled = false;
+            submitButton.disabled = false;
+        };
+
+        const showJudgment = (page, isCorrect, userAnswer, correctAnswer) => {
+            const card = page.querySelector('.study-card--input');
+            const overlay = page.querySelector('[data-study-input-feedback]');
+            const markSlot = page.querySelector('[data-study-mark-slot]');
+            const userAnswerDisplay = page.querySelector('[data-study-user-answer-display]');
+            const input = page.querySelector('[data-study-answer-input]');
+            const submitButton = page.querySelector('[data-study-answer-submit]');
+            const correctReveal = page.querySelector('[data-study-correct-reveal]');
+            const correctText = page.querySelector('[data-study-correct-text]');
+            const liveStatus = page.querySelector('[data-study-live-status]');
+
+            input.disabled = true;
+            submitButton.disabled = true;
+            card?.classList.add('is-judged');
+            overlay.hidden = false;
+
+            userAnswerDisplay.textContent = userAnswer.trim();
+
+            markSlot?.replaceChildren();
+            const mark = createStudyMark(isCorrect);
+            markSlot?.append(mark);
+
+            requestAnimationFrame(() => {
+                mark.classList.add('is-drawing');
+            });
+
+            liveStatus.textContent = isCorrect ? '正解' : '不正解';
+
+            if (isCorrect) {
+                correctReveal.hidden = true;
+            } else {
+                correctReveal.hidden = false;
+                correctText.textContent = correctAnswer;
+            }
+
+            setInputActionsVisible(true);
+            nextButton?.focus();
+        };
+
+        const peelTopPage = (onComplete) => {
+            const top = getTopPage();
+            if (!top || isAnimating) {
+                return;
+            }
+
+            isAnimating = true;
+            setInputActionsVisible(false);
+            top.classList.add('is-turning');
+
+            window.setTimeout(() => {
+                top.remove();
+                pageElements.shift();
+                markActivePage();
+                isAnimating = false;
+                isJudged = false;
+                onComplete?.();
+            }, PAGE_TURN_MS);
+        };
+
+        const syncChromeToTopPage = () => {
+            if (pageElements.length === 0) {
+                return;
+            }
+
+            updateProgress();
+            renderStackPreview();
+
+            const top = getTopPage();
+            const input = top?.querySelector('[data-study-answer-input]');
+            input?.focus();
+        };
+
+        const submitAnswer = async (page) => {
+            if (
+                isJudged ||
+                isAnimating ||
+                isCheckingAnswer ||
+                page !== getTopPage()
+            ) {
+                return;
+            }
+
+            const word = words[currentWordIndex()];
+            if (!word) {
+                return;
+            }
+
+            const input = page.querySelector('[data-study-answer-input]');
+            const userAnswer = input?.value ?? '';
+            const correctAnswer = answerFor(word);
+
+            isCheckingAnswer = true;
+
+            let isCorrect = false;
+
+            try {
+                isCorrect = await isStudyAnswerCorrect(
+                    userAnswer,
+                    correctAnswer,
+                    direction,
+                );
+            } catch (error) {
+                console.error('Failed to check study answer:', error);
+            } finally {
+                isCheckingAnswer = false;
+            }
+
+            isJudged = true;
+
+            if (isCorrect) {
+                correctCount += 1;
+            } else {
+                incorrectCount += 1;
+                incorrectWords.push(word);
+            }
+
+            showJudgment(page, isCorrect, userAnswer, correctAnswer);
+        };
+
+        const advanceToNext = () => {
+            if (!isJudged || isAnimating) {
+                return;
+            }
+
+            peelTopPage(() => {
+                if (pageElements.length === 0) {
+                    finishStudy();
+                    return;
+                }
+
+                resetPageState(getTopPage());
+                syncChromeToTopPage();
+            });
+        };
+
+        deck?.addEventListener('submit', (event) => {
+            const form = event.target.closest('[data-study-input-form]');
+            if (!form) {
+                return;
+            }
+
+            event.preventDefault();
+            submitAnswer(form.closest('.study-page'));
+        });
+
+        nextButton?.addEventListener('click', () => {
+            advanceToNext();
+        });
+
+        buildDeck();
+        syncChromeToTopPage();
+    } else {
+    const deck = studyRoot.querySelector('[data-study-deck]');
+    const stackLayers = studyRoot.querySelectorAll('[data-stack-layer]');
+    const actions = studyRoot.querySelector('[data-study-actions]');
+    const incorrectButton =
+        actions?.querySelector('[data-answer="incorrect"]');
+    const correctButton =
+        actions?.querySelector('[data-answer="correct"]');
+
+    const ANSWER_ACTIONS_REVEAL_MS = Math.round(PAGE_TURN_MS * 0.72);
+
+    let pageElements = [];
+    let isAnimating = false;
+    let answerActionsRevealed = false;
+    let pendingAdvanceAfterPeel = false;
+    let revealActionsTimerId = null;
 
     const getTopPage = () => pageElements[0] ?? null;
 
@@ -853,19 +1347,6 @@ if (studyRoot) {
         });
     };
 
-    const createPaperBack = () => {
-        const back = document.createElement('div');
-        back.className = 'study-page__sheet study-page__sheet--back';
-        back.setAttribute('aria-hidden', 'true');
-
-        const line = document.createElement('span');
-        line.className = 'study-page__paper-line';
-        line.setAttribute('aria-hidden', 'true');
-        back.append(line);
-
-        return back;
-    };
-
     const createPageElement = (pageData, zIndex) => {
         const { type, word, wordIndex } = pageData;
         const isQuestion = type === 'question';
@@ -993,68 +1474,6 @@ if (studyRoot) {
         }, PAGE_TURN_MS);
     };
 
-    const renderIncorrectList = () => {
-        if (!incorrectListElement || !incorrectSectionElement) {
-            return;
-        }
-
-        incorrectListElement.replaceChildren();
-
-        if (incorrectWords.length === 0) {
-            incorrectSectionElement.hidden = true;
-
-            if (perfectMessageElement) {
-                perfectMessageElement.hidden = false;
-            }
-
-            return;
-        }
-
-        incorrectSectionElement.hidden = false;
-
-        if (perfectMessageElement) {
-            perfectMessageElement.hidden = true;
-        }
-
-        incorrectWords.forEach((word) => {
-            const item = document.createElement('li');
-            const question = document.createElement('strong');
-            const answer = document.createElement('span');
-
-            question.textContent = questionFor(word);
-            answer.textContent = answerFor(word);
-            item.append(question, answer);
-            incorrectListElement.append(item);
-        });
-    };
-
-    const finishStudy = () => {
-        studyRoot.hidden = true;
-
-        if (completeScreen) {
-            completeScreen.hidden = false;
-        }
-
-        if (correctCountElement) {
-            correctCountElement.textContent = String(correctCount);
-        }
-
-        if (incorrectCountElement) {
-            incorrectCountElement.textContent = String(incorrectCount);
-        }
-
-        if (completeSummaryElement) {
-            completeSummaryElement.textContent =
-                `${words.length}問中 ${correctCount}問正解`;
-        }
-
-        renderIncorrectList();
-
-        if (progressLabel) {
-            progressLabel.textContent = '完了';
-        }
-    };
-
     const syncChromeToTopPage = () => {
         if (pageElements.length === 0) {
             return;
@@ -1144,4 +1563,5 @@ if (studyRoot) {
 
     buildDeck();
     syncChromeToTopPage();
+    }
 }

@@ -27,6 +27,7 @@ auth.json
 # Frontend build output (produced in the frontend stage)
 /public/build
 /public/hot
+/public/kuromoji
 /public/storage
 /public/fonts-manifest.dev.json
 

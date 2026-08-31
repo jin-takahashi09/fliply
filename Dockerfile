@@ -14,13 +14,15 @@ FROM node:22-bookworm-slim AS frontend
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY scripts ./scripts
 RUN npm ci
 
 COPY vite.config.js ./
 COPY resources ./resources
 COPY public ./public
 
-RUN npm run build
+# public/ copy may omit generated dict; ensure Kuromoji assets exist before Vite build.
+RUN npm run postinstall && npm run build
 
 # -----------------------------------------------------------------------------
 # Stage 2: Composer vendor (no-dev)
@@ -90,6 +92,7 @@ COPY --chown=www-data:www-data . .
 # Production vendor + built Vite assets
 COPY --from=vendor --chown=www-data:www-data /app/vendor ./vendor
 COPY --from=frontend --chown=www-data:www-data /app/public/build ./public/build
+COPY --from=frontend --chown=www-data:www-data /app/public/kuromoji ./public/kuromoji
 
 # Temporary env for artisan during image build only (removed before the layer finishes).
 # Runtime secrets and DB credentials come from Cloud Run env vars.

@@ -34,6 +34,22 @@
             </fieldset>
 
             <fieldset class="settings-card reveal reveal--delay-2">
+                <legend>学習方法</legend>
+                <div class="choice-grid">
+                    <label class="choice-card">
+                        <input type="radio" name="method" value="flip" checked>
+                        <span class="choice-card__indicator"></span>
+                        <span><strong>カードをめくる</strong><small>答えを考えてカードをめくる</small></span>
+                    </label>
+                    <label class="choice-card">
+                        <input type="radio" name="method" value="input">
+                        <span class="choice-card__indicator"></span>
+                        <span><strong>入力して答える</strong><small>答えを入力して正誤判定</small></span>
+                    </label>
+                </div>
+            </fieldset>
+
+            <fieldset class="settings-card reveal reveal--delay-3">
                 <legend>出題する単語</legend>
                 <div class="choice-stack">
                     <label class="scope-card">
@@ -51,7 +67,7 @@
                 </div>
             </fieldset>
 
-            <button type="submit" class="start-button reveal reveal--delay-3">
+            <button type="submit" class="start-button reveal reveal--delay-4">
                 <span>学習をスタート</span>
                 <span class="start-button__arrow"><x-icon name="arrow-right" :size="19" /></span>
             </button>

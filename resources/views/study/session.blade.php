@@ -1,6 +1,6 @@
 @extends('layouts.app', ['hideNav' => true, 'compactHeader' => true])
 
-@section('title', 'カード学習 - Fliply')
+@section('title', ($method ?? 'flip') === 'input' ? '入力学習 - Fliply' : 'カード学習 - Fliply')
 
 @section('compact-header')
     <a href="{{ route('study.settings') }}" class="focus-header__close" aria-label="学習を終了">
@@ -8,7 +8,15 @@
     </a>
     <div class="focus-header__progress">
         <strong data-progress-label>{{ $words->isEmpty() ? '0 / 0' : '1 / '.$words->count() }}</strong>
-        <span>{{ $scope === 'hard' ? '難しい単語' : 'カード学習' }}</span>
+        <span>
+            @if ($scope === 'hard')
+                難しい単語
+            @elseif (($method ?? 'flip') === 'input')
+                入力学習
+            @else
+                カード学習
+            @endif
+        </span>
     </div>
     <span class="focus-header__spacer"></span>
 @endsection
@@ -33,13 +41,18 @@
             $firstQuestion = $direction === 'en-ja'
                 ? $firstWord->english
                 : $firstWord->japanese;
+            $answerLabel = $direction === 'ja-en' ? '英語で答える' : '日本語で答える';
         @endphp
 
         <section
             class="study-session"
             data-study
+            data-method="{{ $method }}"
             data-direction="{{ $direction }}"
             data-first-question="{{ $firstQuestion }}"
+            @if ($method === 'input')
+                data-answer-label="{{ $answerLabel }}"
+            @endif
         >
             <div class="progress-track" aria-hidden="true">
                 <span data-progress-bar data-progress-width="{{ 100 / $words->count() }}"></span>
@@ -62,16 +75,24 @@
                 </div>
             </div>
 
-            <div class="study-actions" data-study-actions aria-hidden="true">
-                <button type="button" class="answer-button answer-button--incorrect" data-answer="incorrect">
-                    <x-icon name="close" :size="19" />
-                    <span><strong>不正解</strong></span>
-                </button>
-                <button type="button" class="answer-button answer-button--correct" data-answer="correct">
-                    <x-icon name="check" :size="19" />
-                    <span><strong>正解</strong></span>
-                </button>
-            </div>
+            @if ($method === 'input')
+                <div class="study-input-actions" data-study-input-actions hidden aria-hidden="true">
+                    <button type="button" class="primary-button study-input-next" data-study-next>
+                        次へ →
+                    </button>
+                </div>
+            @else
+                <div class="study-actions" data-study-actions aria-hidden="true">
+                    <button type="button" class="answer-button answer-button--incorrect" data-answer="incorrect">
+                        <x-icon name="close" :size="19" />
+                        <span><strong>不正解</strong></span>
+                    </button>
+                    <button type="button" class="answer-button answer-button--correct" data-answer="correct">
+                        <x-icon name="check" :size="19" />
+                        <span><strong>正解</strong></span>
+                    </button>
+                </div>
+            @endif
         </section>
 
         <section class="complete-screen" data-complete hidden>

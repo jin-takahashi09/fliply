@@ -31,6 +31,14 @@ class StudyController extends Controller
             ? 'hard'
             : 'all';
 
+        $method = in_array(
+            $request->query('method'),
+            ['flip', 'input'],
+            true
+        )
+            ? $request->query('method')
+            : 'flip';
+
         $words = $request->user()
             ->words()
             ->when(
@@ -48,7 +56,8 @@ class StudyController extends Controller
         return view('study.session', compact(
             'words',
             'direction',
-            'scope'
+            'scope',
+            'method'
         ));
     }
 }
