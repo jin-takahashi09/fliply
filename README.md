@@ -4,7 +4,6 @@
 辞書から単語を探して登録し、カードをめくる学習と、答えを入力して正誤判定する学習の両方で英単語と  
 意味を定着させられます。
 
-**公開URL:** [https://fliply-git-270531249855.asia-southeast1.run.app](https://fliply-git-270531249855.asia-southeast1.run.app)
 
 ---
 
