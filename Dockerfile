@@ -51,7 +51,7 @@ RUN composer dump-autoload --optimize --no-dev --no-interaction
 # -----------------------------------------------------------------------------
 # Stage 3: PHP Apache runtime for Cloud Run
 # -----------------------------------------------------------------------------
-FROM php:8.4-apache-bookworm
+FROM php:8.4.27-apache-bookworm
 
 ENV PORT=8080
 
